@@ -448,7 +448,7 @@
       }
 
       const data = await response.json();
-      const reply = data.reply || data.message || data.text || 'Lo siento, no pude procesar tu mensaje.';
+      const reply = data.response || data.reply || data.message || data.text || 'Lo siento, no pude procesar tu mensaje.';
       
       addMessage(reply, 'bot');
       messageHistory.push({ role: 'assistant', content: reply });
