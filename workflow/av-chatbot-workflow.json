@@ -1,0 +1,366 @@
+{
+  "name": "AuxoVelari - Chatbot Backend",
+  "nodes": [
+    {
+      "id": "webhook-receive",
+      "name": "Webhook Chat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "av-chatbot",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "sheets-read-kb",
+      "name": "Leer KB",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "TU_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Conocimiento"
+        },
+        "range": "Conocimiento!A:B",
+        "options": {}
+      }
+    },
+    {
+      "id": "format-prompt",
+      "name": "Prepare DeepSeek",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const wfData = $('Webhook').first().json.body;\nconst msg = wfData.message;\nconst userId = wfData.userId || 'anon';\nconst sessionId = wfData.sessionId || 'av_' + Date.now();\nconst businessName = wfData.businessName || 'Cala Blanca';\nconst history = wfData.history || [];\n\nlet visitorName = '';\nconst nameMatch = msg.match(/(?:me llamo|soy|mi nombre es)\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+)*)/i);\nif (nameMatch) visitorName = nameMatch[1].trim();\n\nlet visitorContact = '';\nconst phoneMatch = msg.match(/(?:tel[eé]fono|celular|m[oó]vil|whatsapp|contacto|ll[aá]mame|mi numero|mi n[uú]mero)[^\\d]*(\\d{7,})/i);\nif (phoneMatch) visitorContact = phoneMatch[1];\nconst emailMatch = msg.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,})/i);\nif (emailMatch && !visitorContact) visitorContact = emailMatch[1];\n\nconst hasContactData = !!(visitorName || visitorContact);\n\nconst kbRows = $('Leer KB').all();\nlet kbText = '';\nif (kbRows && kbRows.length > 0) {\n  kbText = kbRows.map(r => r.json.Tema + ': ' + r.json.Contenido).join('\\n');\n}\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}...\nBASE DE CONOCIMIENTO DEL NEGOCIO:\n${kbText}\nPAUTAS: Responde en espanol, usa los datos de la KB, pide contacto si hay intencion de compra, no inventes`;\n\nconst messages = [{ role: 'system', content: systemPrompt }];\nconst recentHistory = history.slice(-8);\nfor (const h of recentHistory) messages.push({ role: h.role, content: h.content });\nmessages.push({ role: 'user', content: msg });\n\nreturn [{ json: { userId, sessionId, message: msg, visitorName, visitorContact, hasContactData, businessName, timestamp: new Date().toISOString(), deepseekPayload: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.7, max_tokens: 800 }) } }];"
+      }
+    },
+    {
+      "id": "deepseek-call",
+      "name": "DeepSeek API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TU_DEEPSEEK_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.deepseekPayload }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const data = $input.first().json;\nconst text = data.choices?.[0]?.message?.content || 'Error';\nconst prepData = $('Prepare DeepSeek').first().json;\n\nlet estado = 'Rebote';\nif (prepData.hasContactData) estado = 'Lead caliente';\nelse if (prepData.message && prepData.message.length > 5) estado = 'Consulta';\n\nconst frases = text.split(/[.!?]\\s+/);\nconst resumen = frases.slice(0, 2).join('. ').substring(0, 200);\n\nconst temas = [];\nif (/precio|cuánto|cuesta/i.test(prepData.message)) temas.push('Precios');\nif (/reserva|mesa|disponib/i.test(prepData.message)) temas.push('Reservas');\nif (/carta|menú|plato/i.test(prepData.message)) temas.push('Carta/Menú');\nif (/horario|abren/i.test(prepData.message)) temas.push('Horario');\nif (temas.length === 0) temas.push('General');\n\nconst confianza = data.choices?.[0]?.finish_reason === 'stop' ? 'Alta' : 'Media';\n\nreturn [{ json: { response: text, sessionId: prepData.sessionId, visitorName: prepData.visitorName || '', visitorContact: prepData.visitorContact || '', hasContactData: prepData.hasContactData, businessName: prepData.businessName, userMessage: prepData.message, timestamp: prepData.timestamp, estado, resumen, temas: temas.join(', '), confianza } }];"
+      }
+    },
+    {
+      "id": "sheets-crm",
+      "name": "Google Sheets CRM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1250,
+        300
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "TU_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CRM"
+        },
+        "range": "CRM!A:G",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "Fecha y hora",
+              "type": "string",
+              "defaultMatch": true
+            },
+            {
+              "id": "nombre",
+              "displayName": "Nombre del visitante",
+              "type": "string"
+            },
+            {
+              "id": "contacto",
+              "displayName": "Contacto",
+              "type": "string"
+            },
+            {
+              "id": "resumen",
+              "displayName": "Resumen conversación",
+              "type": "string"
+            },
+            {
+              "id": "estado",
+              "displayName": "Estado del lead",
+              "type": "string"
+            },
+            {
+              "id": "temas",
+              "displayName": "Temas",
+              "type": "string"
+            },
+            {
+              "id": "confianza",
+              "displayName": "Confianza",
+              "type": "string"
+            }
+          ],
+          "value": {
+            "fecha": "={{ $json.timestamp }}",
+            "nombre": "={{ $json.visitorName }}",
+            "contacto": "={{ $json.visitorContact }}",
+            "resumen": "={{ $json.resumen }}",
+            "estado": "={{ $json.estado }}",
+            "temas": "={{ $json.temas }}",
+            "confianza": "={{ $json.confianza }}"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "if-lead",
+      "name": "¿Es Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $('Format Response').first().json.hasContactData }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        }
+      }
+    },
+    {
+      "id": "telegram-notify",
+      "name": "Telegram Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1650,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botTU_TELEGRAM_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "TU_CHAT_ID"
+            },
+            {
+              "name": "text",
+              "value": "={{ '🔥 LEAD: ' + ($('Format Response').first().json.visitorName || 'Sin nombre') + ' - ' + ($('Format Response').first().json.visitorContact || 'Sin contacto') + ' | ' + $('Prepare DeepSeek').first().json.message }}"
+            }
+          ]
+        },
+        "sendHeaders": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "output-response",
+      "name": "Output Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1850,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const formatData = $('Format Response').first().json;\nreturn [{ json: { response: formatData.response } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Chat": {
+      "main": [
+        [
+          {
+            "node": "Leer KB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer KB": {
+      "main": [
+        [
+          {
+            "node": "Prepare DeepSeek",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare DeepSeek": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek API": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets CRM": {
+      "main": [
+        [
+          {
+            "node": "¿Es Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Lead?": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Output Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Notify": {
+      "main": [
+        [
+          {
+            "node": "Output Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "auxovelari"
+    },
+    {
+      "name": "chatbot"
+    },
+    {
+      "name": "mvp"
+    }
+  ]
+}

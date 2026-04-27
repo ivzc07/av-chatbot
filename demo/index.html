@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurante Cala Blanca — Menorca</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            color: #2c3e50;
+            background: #fdfaf3;
+            line-height: 1.7;
+        }
+        header {
+            background: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), 
+                        url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400"><rect fill="%232E86AB" width="1200" height="400"/><text fill="white" opacity="0.15" font-size="200" x="600" y="240" text-anchor="middle">🌊</text></svg>');
+            background-size: cover;
+            background-position: center;
+            color: white;
+            text-align: center;
+            padding: 100px 20px 80px;
+        }
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-style: italic;
+        }
+        nav {
+            background: white;
+            padding: 15px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        nav a {
+            color: #2E86AB;
+            text-decoration: none;
+            margin: 0 20px;
+            font-weight: 500;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        nav a:hover { color: #1a5c74; }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        section {
+            margin-bottom: 50px;
+        }
+        h2 {
+            font-size: 2rem;
+            color: #2E86AB;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e8e8e8;
+            padding-bottom: 10px;
+        }
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .menu-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .menu-item h3 {
+            color: #2E86AB;
+            margin-bottom: 5px;
+        }
+        .menu-item .price {
+            color: #c0392b;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .menu-item p {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .info-card .icon { font-size: 2rem; margin-bottom: 10px; }
+        footer {
+            background: #2c3e50;
+            color: #aaa;
+            text-align: center;
+            padding: 30px 20px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="#menu">Carta</a>
+    <a href="#info">Info</a>
+    <a href="#contacto">Contacto</a>
+    <a href="#reservas">Reservas</a>
+</nav>
+
+<header>
+    <h1>Cala Blanca</h1>
+    <p>Mariscos y cocina mediterránea frente al mar</p>
+</header>
+
+<div class="container">
+    <section id="menu">
+        <h2>Nuestra Carta</h2>
+        <div class="menu-grid">
+            <div class="menu-item">
+                <h3>Caldereta de Langosta</h3>
+                <div class="price">€42</div>
+                <p>La receta tradicional menorquina con langosta local, sofrito y hierbas de la isla.</p>
+            </div>
+            <div class="menu-item">
+                <h3>Arroz Negro con Sepia</h3>
+                <div class="price">€24</div>
+                <p>Arroz meloso con tinta de sepia, alioli casero y gambas rojas.</p>
+            </div>
+            <div class="menu-item">
+                <h3>Pulpo a la Brasa</h3>
+                <div class="price">€28</div>
+                <p>Con parmentier de patata trufada y pimentón de La Vera.</p>
+            </div>
+            <div class="menu-item">
+                <h3>Gambas Rojas de Menorca</h3>
+                <div class="price">€34</div>
+                <p>A la plancha con sal marina. El sabor auténtico del Mediterráneo.</p>
+            </div>
+            <div class="menu-item">
+                <h3>Ensalada de Burrata y Tomate</h3>
+                <div class="price">€16</div>
+                <p>Con tomates de ramallet, albahaca fresca y aceite de oliva virgen extra.</p>
+            </div>
+            <div class="menu-item">
+                <h3>Tarta de Queso de Mahón</h3>
+                <div class="price">€10</div>
+                <p>Postre con D.O. Mahón-Menorca, mermelada de higos y helado de vainilla.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="info">
+        <h2>Información</h2>
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="icon">🕐</div>
+                <h3>Horario</h3>
+                <p>Lun–Dom<br>13:00–16:00<br>19:00–23:30</p>
+            </div>
+            <div class="info-card">
+                <div class="icon">📍</div>
+                <h3>Ubicación</h3>
+                <p>Paseo Marítimo 42<br>Cala Blanca<br>Ciutadella, Menorca</p>
+            </div>
+            <div class="info-card">
+                <div class="icon">📞</div>
+                <h3>Contacto</h3>
+                <p>+34 971 48 52 10<br>info@calablanca.es</p>
+            </div>
+            <div class="info-card">
+                <div class="icon">⭐</div>
+                <h3>Valoración</h3>
+                <p>4.7 ★★★★★<br>Google Reviews<br>320+ reseñas</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="reservas">
+        <h2>Reservas</h2>
+        <p style="margin-bottom:15px;">Aceptamos reservas con hasta 30 días de antelación. Para grupos de más de 8 personas, consúltenos directamente.</p>
+        <p>También ofrecemos servicio para eventos privados y celebraciones especiales. Pregúntenos por nuestro menú de grupo desde €45/persona.</p>
+    </section>
+</div>
+
+<footer>
+    &copy; 2026 Cala Blanca — Ciutadella, Menorca · Todos los derechos reservados
+</footer>
+
+<!-- ============================================================
+     AUXOVELARI CHATBOT WIDGET — 1 LÍNEA DE INSTALACIÓN
+     ============================================================ -->
+<script src="../widget/av-chatbot.js"
+        data-business="Cala Blanca 🏖️"
+        data-name="Cala Blanca"
+        data-welcome="¡Bienvenido a Cala Blanca! Soy el asistente virtual. Pregúntame por nuestra carta, horarios o reservas."
+        data-color="#2E86AB"
+        data-tone="informal"
+        data-api="https://auxo.app.n8n.cloud/webhook/av-chatbot">
+</script>
+
+</body>
+</html>
