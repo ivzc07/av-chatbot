@@ -40,8 +40,6 @@
   const styles = `
     #av-chatbot-container * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
     }
     
     #av-chatbot-container {
@@ -114,6 +112,17 @@
       align-items: center;
       gap: 10px;
       flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .av-chat-header > div {
+      overflow: hidden;
+    }
+
+    .av-chat-header > div > div:first-child {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .av-chat-header-avatar {
@@ -148,8 +157,10 @@
       padding: 10px 14px;
       border-radius: 14px;
       font-size: 14px;
-      line-height: 1.45;
-      word-wrap: break-word;
+      line-height: 1.55;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      white-space: pre-wrap;
       animation: avFadeIn 0.3s ease;
     }
 
@@ -179,6 +190,9 @@
       border: 1px solid #ffcccc;
       color: #c0392b;
       font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
 
     .av-message-lead-captured {
@@ -188,6 +202,8 @@
       border-radius: 12px;
       color: #2e7d32;
       font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: break-word;
       text-align: center;
       padding: 14px 18px;
       max-width: 90%;
