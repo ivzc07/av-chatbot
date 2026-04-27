@@ -57,7 +57,7 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 
 1. Haz clic en **Activo** (toggle arriba a la derecha)
 2. Copia la URL del webhook (se muestra en el nodo "Webhook Chat")
-3. Esta URL será el `data-endpoint` del widget
+3. Esta URL será el `data-api` del widget
 
 ---
 
@@ -93,9 +93,9 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 2. Ponle nombre: `AV-CRM-[NOMBRE_CLIENTE]`
 3. Añade estas columnas en la fila 1:
 
-| Fecha/Hora | Visitante | Contacto | Resumen | Estado | Temas | Confianza |
-|---|---|---|---|---|---|---|
-| (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) |
+| Fecha/Hora | Visitante | Contacto | Resumen | Estado | Temas | Confianza | Session ID |
+|---|---|---|---|---|---|---|---|
+| (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) |
 
 4. Comparte la hoja con el email de la service account (Editor)
 5. Copia el ID de la hoja (está en la URL: `https://docs.google.com/spreadsheets/d/EL_ID/edit`)
@@ -108,13 +108,11 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
    - Si el texto contiene "Lead caliente" → fondo verde claro
    - Si el texto contiene "Consulta" → fondo amarillo claro
    - Si el texto contiene "Rebote" → fondo gris claro
-4. Añade un panel resumen en las primeras filas:
-   - A1: "📊 RESUMEN CRM"
-   - A2: "Total visitantes:"
-   - A3: "Leads captados:"
-   - A4: "Tasa conversión:"
-5. Fija la fila de encabezado: **Ver → Fijar → 1 fila**
-6. Ordena por fecha: Datos → Ordenar por columna A (Z→A)
+4. Añade un panel resumen en las filas superiores:
+   - Fila 1: "📊 RESUMEN CRM — [NOMBRE_NEGOCIO]" (merge A1:H1, fondo oscuro)
+   - Fila 2: "Total visitantes:" / `=COUNTA(A4:A)` / "Leads captados:" / `=COUNTIF(E4:E;"Lead caliente")` / "Tasa conversión:" / `=IF(B2>0; E2/B2; 0)` con formato %
+   - Fila 3: Headers (fondo oscuro, texto blanco)
+5. Fija las 3 primeras filas: **Ver → Fijar → 3 filas**
 
 ---
 
@@ -162,9 +160,11 @@ En el `<head>` o justo antes de `</body>` de la web del cliente, añade:
 ```html
 <script src="https://TU_SERVIDOR/widget/av-chatbot.js"
         data-business="NOMBRE_DEL_NEGOCIO"
+        data-name="NOMBRE_DEL_NEGOCIO"
         data-welcome="¡Hola! Soy el asistente virtual de NOMBRE_DEL_NEGOCIO. ¿En qué puedo ayudarte?"
         data-color="#COLOR_PRINCIPAL"
-        data-endpoint="https://TU_N8N/webhook/av-chatbot">
+        data-tone="informal"
+        data-api="https://TU_N8N/webhook/av-chatbot">
 </script>
 ```
 
@@ -172,10 +172,12 @@ En el `<head>` o justo antes de `</body>` de la web del cliente, añade:
 
 | Parámetro | Descripción | Ejemplo |
 |---|---|---|
-| `data-business` | Nombre del negocio (aparece en cabecera) | `Mi Negocio 🏖️` |
+| `data-business` | Nombre del negocio (aparece en cabecera del chat) | `Mi Negocio 🏖️` |
+| `data-name` | Alias de data-business (compatible con PRD) | `Mi Negocio` |
 | `data-welcome` | Mensaje de bienvenida al abrir el chat | `¡Hola! ¿En qué puedo ayudarte?` |
 | `data-color` | Color principal del widget (hex) | `#2E86AB` |
-| `data-endpoint` | URL del webhook de n8n | `https://n8n.ejemplo.com/webhook/av-chatbot` |
+| `data-tone` | Tono del chatbot: `formal` o `informal` | `informal` |
+| `data-api` | URL del webhook de n8n | `https://n8n.ejemplo.com/webhook/av-chatbot` |
 
 ---
 
@@ -201,7 +203,7 @@ Después de instalar, verifica cada paso:
 
 ### El chatbot no responde
 - Verifica que el workflow de n8n está **activo**
-- Revisa la URL del webhook en `data-endpoint`
+- Revisa la URL del webhook en `data-api`
 - Comprueba que la API key de DeepSeek es válida y tiene saldo
 
 ### No llegan notificaciones de Telegram

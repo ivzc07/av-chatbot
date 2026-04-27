@@ -37,9 +37,11 @@ Instalador: ____________________
 ```html
 <script src="________________________________"
         data-business="________________________________"
+        data-name="________________________________"
         data-welcome="________________________________"
         data-color="#__________"
-        data-endpoint="________________________________">
+        data-tone="informal"
+        data-api="________________________________">
 </script>
 ```
 
@@ -56,10 +58,10 @@ Instalador: ____________________
 - [ ] Crear Service Account
 - [ ] Descargar JSON de credenciales
 - [ ] Crear nueva Google Sheet: `AV-CRM-[NOMBRE_CLIENTE]`
-- [ ] Añadir columnas: Fecha/Hora, Visitante, Contacto, Resumen, Estado, Temas, Confianza
+- [ ] Añadir columnas: Fecha/Hora, Visitante, Contacto, Resumen, Estado, Temas, Confianza, Session ID
 - [ ] Formatear columna Estado (verde/amarillo/gris)
 - [ ] Añadir panel resumen (filas superiores)
-- [ ] Fijar fila de encabezado
+- [ ] Fijar primeras 3 filas (panel + header)
 - [ ] Compartir hoja con email de service account (Editor)
 - [ ] Anotar ID de la hoja: `________________________________`
 
