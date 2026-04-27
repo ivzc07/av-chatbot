@@ -2,28 +2,54 @@
   "name": "AuxoVelari - Chatbot Backend",
   "nodes": [
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "av-chatbot",
-        "responseMode": "responseNode",
-        "options": {}
-      },
       "id": "webhook-receive",
       "name": "Webhook Chat",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "av-chatbot",
+        "responseMode": "lastNode",
+        "options": {}
+      }
     },
     {
+      "id": "format-prompt",
+      "name": "Prepare DeepSeek",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const msg = $input.first().json.body.message;\nconst userId = $input.first().json.body.userId || 'anon';\nconst sessionId = $input.first().json.body.sessionId || 'av_' + Date.now();\nconst businessName = $input.first().json.body.businessName || 'Cala Blanca';\nconst history = $input.first().json.body.history || [];\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}. Responde de forma amable, natural y concisa. Usa la informacion del negocio para responder.\n\nINFORMACION DEL NEGOCIO:\n- Nombre: ${businessName}\n- Horario: Lun-Dom 13:00-16:00 y 19:00-23:30\n- Direccion: Paseo Maritimo 42, Cala Blanca, Ciutadella, Menorca\n- Telefono: +34 971 48 52 10\n- Email: info@calablanca.es\n- Especialidad: mariscos, caldereta de langosta, arroz negro, pulpo a la brasa\n- Precios: 16-42 euros por plato principal, menu degustacion 65 euros\n- Reservas: hasta 30 dias de antelacion, grupos +8 consultar\n- Terraza disponible, vistas al mar, acceso adaptado\n\nPAUTAS:\n- Responde en espanol, tono profesional pero cercano\n- Si el visitante pregunta algo que no sabes, dilo con honestidad y ofrece conectarle con una persona\n- Si el visitante muestra intencion de compra (pregunta precios, disponibilidad, reservas), ofrece amablemente comprobar disponibilidad\n- NO inventes informacion que no tengas`;\n\nconst messages = [{ role: 'system', content: systemPrompt }];\nconst recentHistory = history.slice(-8);\nfor (const h of recentHistory) {\n  messages.push({ role: h.role, content: h.content });\n}\nmessages.push({ role: 'user', content: msg });\n\nconst hasLeadIntent = /reserva|precio|disponib|mesa|cena|comida|para \\d|cu[áa]nto|cuesta|pedir/.test(msg.toLowerCase());\n\nreturn [{\n  json: {\n    userId, sessionId, message: msg, businessName,\n    hasLeadIntent, timestamp: new Date().toISOString(),\n    deepseekPayload: JSON.stringify({\n      model: 'deepseek-chat', messages,\n      temperature: 0.7, max_tokens: 800\n    })\n  }\n}];"
+      }
+    },
+    {
+      "id": "deepseek-call",
+      "name": "DeepSeek API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        650,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://api.deepseek.com/v1/chat/completions",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer RBFyPAWd2LnDqqdk7PYe6ewUzCErqfVcbZ3geyABzgU"
+              "value": "Bearer TU_DEEPSEEK_API_KEY"
             },
             {
               "name": "Content-Type",
@@ -32,62 +58,133 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\n  \"model\": \"deepseek-chat\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"={{ $json.systemPrompt }}\"\n    },\n    ...{{ $json.messages }}\n  ],\n  \"temperature\": 0.7,\n  \"max_tokens\": 800\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.deepseekPayload }}",
         "options": {}
-      },
-      "id": "deepseek-call",
-      "name": "DeepSeek V3.2",
+      }
+    },
+    {
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const data = $input.first().json;\nconst text = data.choices?.[0]?.message?.content || 'Lo siento, hubo un error.';\nconst prepData = $('Prepare DeepSeek').first().json;\n\nreturn [{\n  json: {\n    response: text,\n    sessionId: prepData.sessionId || 'unknown',\n    hasLeadIntent: prepData.hasLeadIntent || false,\n    businessName: prepData.businessName || 'Cala Blanca',\n    userMessage: prepData.message || '',\n    timestamp: prepData.timestamp || ''\n  }\n}];"
+      }
+    },
+    {
+      "id": "sheets-crm",
+      "name": "Google Sheets CRM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1050,
+        300
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "TU_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Hoja 1"
+        },
+        "range": "Hoja 1!A:F",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "Timestamp",
+              "type": "string",
+              "defaultMatch": true
+            },
+            {
+              "id": "userId",
+              "displayName": "UserID",
+              "type": "string"
+            },
+            {
+              "id": "mensaje",
+              "displayName": "Mensaje",
+              "type": "string"
+            },
+            {
+              "id": "respuesta",
+              "displayName": "Respuesta",
+              "type": "string"
+            },
+            {
+              "id": "estado",
+              "displayName": "Estado",
+              "type": "string"
+            }
+          ],
+          "value": {
+            "timestamp": "={{ $('Prepare DeepSeek').first().json.timestamp }}",
+            "userId": "={{ $('Prepare DeepSeek').first().json.userId }}",
+            "mensaje": "={{ $('Prepare DeepSeek').first().json.message }}",
+            "respuesta": "={{ $json.response }}",
+            "estado": "Completado"
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "telegram-notify",
+      "name": "Telegram Notify",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [650, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// ============================================================\n// FORMAT PROMPT + EXTRAER RESPUESTA\n// ============================================================\n\nconst webhookData = $input.all();\nconst incomingMessage = webhookData[0].json;\n\n// Extraer datos del mensaje entrante\nconst userMessage = incomingMessage.message || '';\nconst sessionId = incomingMessage.sessionId || 'unknown';\nconst businessName = incomingMessage.businessName || 'Negocio';\nconst history = incomingMessage.history || [];\n\n// Construir system prompt con el contexto del negocio\nconst systemPrompt = `Eres el asistente virtual de ${businessName}. \nResponde de forma amable, natural y concisa. Usa la informacion del negocio para responder.\n\nINFORMACION DEL NEGOCIO:\n- Nombre: ${businessName}\n- Horario: Lun-Dom 13:00-16:00 y 19:00-23:30\n- Direccion: Paseo Maritimo 42, Cala Blanca, Ciutadella, Menorca\n- Telefono: +34 971 48 52 10\n- Email: info@calablanca.es\n- Especialidad: mariscos, caldereta de langosta, arroz negro, pulpo a la brasa\n- Precios: €16-€42 por plato principal, menu degustacion €65\n- Reservas: hasta 30 dias de antelacion, grupos +8 consultar\n- Terraza disponible, vistas al mar, acceso adaptado\n\nPAUTAS:\n- Responde en español, tono profesional pero cercano\n- Si el visitante pregunta algo que no sabes, dilo con honestidad y ofrece conectarle con una persona\n- Si el visitante muestra intencion de compra (pregunta precios, disponibilidad, reservas), ofrece amablemente comprobar disponibilidad\n- NO inventes informacion que no tengas`;\n\n// Construir array de mensajes para DeepSeek\nconst messages = [];\n\n// Agregar historial (ultimos 8 mensajes)\nconst recentHistory = history.slice(-8);\nfor (const msg of recentHistory) {\n  messages.push({ role: msg.role, content: msg.content });\n}\n\n// Agregar mensaje actual si no esta en el historial\nif (!recentHistory.length || recentHistory[recentHistory.length - 1].role !== 'user' || recentHistory[recentHistory.length - 1].content !== userMessage) {\n  messages.push({ role: 'user', content: userMessage });\n}\n\n// Detectar intencion de compra\nconst leadKeywords = ['precio', 'cuesta', 'cuanto', 'reserva', 'disponibilidad', 'cuando', 'coger', 'apuntar', 'contratar'];\nconst hasLeadIntent = leadKeywords.some(kw => userMessage.toLowerCase().includes(kw));\n\nreturn {\n  systemPrompt: systemPrompt,\n  messages: messages,\n  sessionId: sessionId,\n  userMessage: userMessage,\n  businessName: businessName,\n  hasLeadIntent: hasLeadIntent,\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "format-prompt",
-      "name": "Formatear Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// ============================================================\n// PROCESAR RESPUESTA DE DEEPSEEK\n// ============================================================\n\nconst deepseekResponse = $input.all();\nconst previousData = $('Formatear Prompt').all();\nconst promptData = previousData[0].json;\n\n// Extraer respuesta del modelo\nconst choice = deepseekResponse[0].json.choices[0];\nconst reply = choice.message.content;\n\n// Guardar datos completos para la respuesta y registro\nreturn {\n  reply: reply,\n  sessionId: promptData.sessionId,\n  userMessage: promptData.userMessage,\n  businessName: promptData.businessName,\n  hasLeadIntent: promptData.hasLeadIntent,\n  timestamp: promptData.timestamp,\n  model: 'deepseek-chat',\n  usage: deepseekResponse[0].json.usage\n};\n"
-      },
-      "id": "process-response",
-      "name": "Procesar Respuesta",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [850, 300]
-    },
-    {
+      "typeVersion": 4,
+      "position": [
+        1250,
+        400
+      ],
       "parameters": {
         "method": "POST",
-        "url": "https://api.telegram.org/bot8725228737:AAEuNS9ENzKCv_bHQ1-_6MtwygyJfWH6zvE/sendMessage",
+        "url": "https://api.telegram.org/botTU_TELEGRAM_TOKEN/sendMessage",
+        "authentication": "none",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\n  \"chat_id\": \"6406624282\",\n  \"text\": \"🔥 LEAD CALIENTE en {{ $json.businessName }}\\n\\n👤 Visitante: {{ $json.visitorName || 'Pendiente de captar' }}\\n💬 Preguntó: {{ $json.userMessage }}\\n🕐 Hora: {{ $json.timestamp }}\\n\\n📊 Ver CRM: {{ $json.sheetsUrl || 'Google Sheets' }}\",\n  \"parse_mode\": \"HTML\"\n}",
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "TU_CHAT_ID"
+            },
+            {
+              "name": "text",
+              "value": "={{ '🔥 ' + $('Format Response').first().json.businessName + ' | ' + $('Prepare DeepSeek').first().json.message }}"
+            }
+          ]
+        },
+        "sendHeaders": false,
         "options": {}
-      },
-      "id": "telegram-notify",
-      "name": "Telegram Notificación",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1050, 500]
+      }
     },
     {
+      "id": "output-response",
+      "name": "Output Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        400
+      ],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"reply\": \"={{ $json.reply }}\",\n  \"sessionId\": \"={{ $json.sessionId }}\",\n  \"hasLeadIntent\": \"={{ $json.hasLeadIntent }}\"\n}",
-        "options": {}
-      },
-      "id": "webhook-response",
-      "name": "Responder al Widget",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1050, 300]
+        "language": "javaScript",
+        "jsCode": "const formatData = $('Format Response').first().json;\nreturn [{ json: { response: formatData.response } }];"
+      }
     }
   ],
   "connections": {
@@ -95,45 +192,62 @@
       "main": [
         [
           {
-            "node": "Formatear Prompt",
+            "node": "Prepare DeepSeek",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Formatear Prompt": {
+    "Prepare DeepSeek": {
       "main": [
         [
           {
-            "node": "DeepSeek V3.2",
+            "node": "DeepSeek API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "DeepSeek V3.2": {
+    "DeepSeek API": {
       "main": [
         [
           {
-            "node": "Procesar Respuesta",
+            "node": "Format Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Procesar Respuesta": {
+    "Format Response": {
       "main": [
         [
           {
-            "node": "Responder al Widget",
+            "node": "Google Sheets CRM",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Google Sheets CRM": {
+      "main": [
+        [
           {
-            "node": "Telegram Notificación",
+            "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Notify": {
+      "main": [
+        [
+          {
+            "node": "Output Response",
             "type": "main",
             "index": 0
           }
@@ -142,10 +256,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "callerPolicy": "workflowsFromSameOwner"
+    "executionOrder": "v1"
   },
-  "staticData": null,
   "tags": [
     {
       "name": "auxovelari"
