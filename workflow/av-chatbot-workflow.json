@@ -18,17 +18,42 @@
       }
     },
     {
-      "id": "format-prompt",
-      "name": "Prepare DeepSeek",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "sheets-read-kb",
+      "name": "Leer KB",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
       "position": [
         450,
         300
       ],
       "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "TU_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Conocimiento"
+        },
+        "range": "Conocimiento!A:B",
+        "options": {}
+      }
+    },
+    {
+      "id": "format-prompt",
+      "name": "Prepare DeepSeek",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
         "language": "javaScript",
-        "jsCode": "const msg = $input.first().json.body.message;\nconst userId = $input.first().json.body.userId || 'anon';\nconst sessionId = $input.first().json.body.sessionId || 'av_' + Date.now();\nconst businessName = $input.first().json.body.businessName || 'Cala Blanca';\nconst history = $input.first().json.body.history || [];\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}. Responde de forma amable, natural y concisa. Usa la informacion del negocio para responder.\n\nINFORMACION DEL NEGOCIO:\n- Nombre: ${businessName}\n- Horario: Lun-Dom 13:00-16:00 y 19:00-23:30\n- Direccion: Paseo Maritimo 42, Cala Blanca, Ciutadella, Menorca\n- Telefono: +34 971 48 52 10\n- Email: info@calablanca.es\n- Especialidad: mariscos, caldereta de langosta, arroz negro, pulpo a la brasa\n- Precios: 16-42 euros por plato principal, menu degustacion 65 euros\n- Reservas: hasta 30 dias de antelacion, grupos +8 consultar\n- Terraza disponible, vistas al mar, acceso adaptado\n\nPAUTAS:\n- Responde en espanol, tono profesional pero cercano\n- Si el visitante pregunta algo que no sabes, dilo con honestidad y ofrece conectarle con una persona\n- Si el visitante muestra intencion de compra (pregunta precios, disponibilidad, reservas), ofrece amablemente comprobar disponibilidad\n- NO inventes informacion que no tengas`;\n\nconst messages = [{ role: 'system', content: systemPrompt }];\nconst recentHistory = history.slice(-8);\nfor (const h of recentHistory) {\n  messages.push({ role: h.role, content: h.content });\n}\nmessages.push({ role: 'user', content: msg });\n\nconst hasLeadIntent = /reserva|precio|disponib|mesa|cena|comida|para \\d|cu[áa]nto|cuesta|pedir/.test(msg.toLowerCase());\n\nreturn [{\n  json: {\n    userId, sessionId, message: msg, businessName,\n    hasLeadIntent, timestamp: new Date().toISOString(),\n    deepseekPayload: JSON.stringify({\n      model: 'deepseek-chat', messages,\n      temperature: 0.7, max_tokens: 800\n    })\n  }\n}];"
+        "jsCode": "const wfData = $('Webhook').first().json.body;\nconst msg = wfData.message;\nconst userId = wfData.userId || 'anon';\nconst sessionId = wfData.sessionId || 'av_' + Date.now();\nconst businessName = wfData.businessName || 'Cala Blanca';\nconst history = wfData.history || [];\n\nlet visitorName = '';\nconst nameMatch = msg.match(/(?:me llamo|soy|mi nombre es)\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+)*)/i);\nif (nameMatch) visitorName = nameMatch[1].trim();\n\nlet visitorContact = '';\nconst phoneMatch = msg.match(/(?:tel[eé]fono|celular|m[oó]vil|whatsapp|contacto|ll[aá]mame|mi numero|mi n[uú]mero)[^\\d]*(\\d{7,})/i);\nif (phoneMatch) visitorContact = phoneMatch[1];\nconst emailMatch = msg.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,})/i);\nif (emailMatch && !visitorContact) visitorContact = emailMatch[1];\n\nconst hasContactData = !!(visitorName || visitorContact);\n\nconst kbRows = $('Leer KB').all();\nlet kbText = '';\nif (kbRows && kbRows.length > 0) {\n  kbText = kbRows.map(r => r.json.Tema + ': ' + r.json.Contenido).join('\\n');\n}\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}...\nBASE DE CONOCIMIENTO DEL NEGOCIO:\n${kbText}\nPAUTAS: Responde en espanol, usa los datos de la KB, pide contacto si hay intencion de compra, no inventes`;\n\nconst messages = [{ role: 'system', content: systemPrompt }];\nconst recentHistory = history.slice(-8);\nfor (const h of recentHistory) messages.push({ role: h.role, content: h.content });\nmessages.push({ role: 'user', content: msg });\n\nreturn [{ json: { userId, sessionId, message: msg, visitorName, visitorContact, hasContactData, businessName, timestamp: new Date().toISOString(), deepseekPayload: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.7, max_tokens: 800 }) } }];"
       }
     },
     {
@@ -37,7 +62,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        650,
+        850,
         300
       ],
       "parameters": {
@@ -49,7 +74,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer TU_DEEPSEEK_API_KEY"
+              "value": "Bearer TU_DEEPSEEK_KEY"
             },
             {
               "name": "Content-Type",
@@ -70,12 +95,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        850,
+        1050,
         300
       ],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "const data = $input.first().json;\nconst text = data.choices?.[0]?.message?.content || 'Lo siento, hubo un error.';\nconst prepData = $('Prepare DeepSeek').first().json;\n\nreturn [{\n  json: {\n    response: text,\n    sessionId: prepData.sessionId || 'unknown',\n    hasLeadIntent: prepData.hasLeadIntent || false,\n    businessName: prepData.businessName || 'Cala Blanca',\n    userMessage: prepData.message || '',\n    timestamp: prepData.timestamp || ''\n  }\n}];"
+        "jsCode": "const data = $input.first().json;\nconst text = data.choices?.[0]?.message?.content || 'Error';\nconst prepData = $('Prepare DeepSeek').first().json;\n\nlet estado = 'Rebote';\nif (prepData.hasContactData) estado = 'Lead caliente';\nelse if (prepData.message && prepData.message.length > 5) estado = 'Consulta';\n\nconst frases = text.split(/[.!?]\\s+/);\nconst resumen = frases.slice(0, 2).join('. ').substring(0, 200);\n\nconst temas = [];\nif (/precio|cuánto|cuesta/i.test(prepData.message)) temas.push('Precios');\nif (/reserva|mesa|disponib/i.test(prepData.message)) temas.push('Reservas');\nif (/carta|menú|plato/i.test(prepData.message)) temas.push('Carta/Menú');\nif (/horario|abren/i.test(prepData.message)) temas.push('Horario');\nif (temas.length === 0) temas.push('General');\n\nconst confianza = data.choices?.[0]?.finish_reason === 'stop' ? 'Alta' : 'Media';\n\nreturn [{ json: { response: text, sessionId: prepData.sessionId, visitorName: prepData.visitorName || '', visitorContact: prepData.visitorContact || '', hasContactData: prepData.hasContactData, businessName: prepData.businessName, userMessage: prepData.message, timestamp: prepData.timestamp, estado, resumen, temas: temas.join(', '), confianza } }];"
       }
     },
     {
@@ -84,7 +109,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1050,
+        1250,
         300
       ],
       "parameters": {
@@ -97,48 +122,89 @@
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "Hoja 1"
+          "value": "CRM"
         },
-        "range": "Hoja 1!A:F",
+        "range": "CRM!A:G",
         "columns": {
           "mappingMode": "defineBelow",
           "schema": [
             {
-              "id": "timestamp",
-              "displayName": "Timestamp",
+              "id": "fecha",
+              "displayName": "Fecha y hora",
               "type": "string",
               "defaultMatch": true
             },
             {
-              "id": "userId",
-              "displayName": "UserID",
+              "id": "nombre",
+              "displayName": "Nombre del visitante",
               "type": "string"
             },
             {
-              "id": "mensaje",
-              "displayName": "Mensaje",
+              "id": "contacto",
+              "displayName": "Contacto",
               "type": "string"
             },
             {
-              "id": "respuesta",
-              "displayName": "Respuesta",
+              "id": "resumen",
+              "displayName": "Resumen conversación",
               "type": "string"
             },
             {
               "id": "estado",
-              "displayName": "Estado",
+              "displayName": "Estado del lead",
+              "type": "string"
+            },
+            {
+              "id": "temas",
+              "displayName": "Temas",
+              "type": "string"
+            },
+            {
+              "id": "confianza",
+              "displayName": "Confianza",
               "type": "string"
             }
           ],
           "value": {
-            "timestamp": "={{ $('Prepare DeepSeek').first().json.timestamp }}",
-            "userId": "={{ $('Prepare DeepSeek').first().json.userId }}",
-            "mensaje": "={{ $('Prepare DeepSeek').first().json.message }}",
-            "respuesta": "={{ $json.response }}",
-            "estado": "Completado"
+            "fecha": "={{ $json.timestamp }}",
+            "nombre": "={{ $json.visitorName }}",
+            "contacto": "={{ $json.visitorContact }}",
+            "resumen": "={{ $json.resumen }}",
+            "estado": "={{ $json.estado }}",
+            "temas": "={{ $json.temas }}",
+            "confianza": "={{ $json.confianza }}"
           }
         },
         "options": {}
+      }
+    },
+    {
+      "id": "if-lead",
+      "name": "¿Es Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $('Format Response').first().json.hasContactData }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        }
       }
     },
     {
@@ -147,13 +213,12 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1250,
-        400
+        1650,
+        200
       ],
       "parameters": {
         "method": "POST",
         "url": "https://api.telegram.org/botTU_TELEGRAM_TOKEN/sendMessage",
-        "authentication": "none",
         "sendBody": true,
         "contentType": "form-urlencoded",
         "bodyParameters": {
@@ -164,7 +229,7 @@
             },
             {
               "name": "text",
-              "value": "={{ '🔥 ' + $('Format Response').first().json.businessName + ' | ' + $('Prepare DeepSeek').first().json.message }}"
+              "value": "={{ '🔥 LEAD: ' + ($('Format Response').first().json.visitorName || 'Sin nombre') + ' - ' + ($('Format Response').first().json.visitorContact || 'Sin contacto') + ' | ' + $('Prepare DeepSeek').first().json.message }}"
             }
           ]
         },
@@ -178,8 +243,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1450,
-        400
+        1850,
+        300
       ],
       "parameters": {
         "language": "javaScript",
@@ -189,6 +254,17 @@
   ],
   "connections": {
     "Webhook Chat": {
+      "main": [
+        [
+          {
+            "node": "Leer KB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer KB": {
       "main": [
         [
           {
@@ -236,7 +312,25 @@
       "main": [
         [
           {
+            "node": "¿Es Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Lead?": {
+      "main": [
+        [
+          {
             "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Output Response",
             "type": "main",
             "index": 0
           }
