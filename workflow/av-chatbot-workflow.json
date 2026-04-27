@@ -1,194 +1,331 @@
 {
-  "name": "AuxoVelari - Chatbot Backend",
+  "name": "AuxoVelari - Chatbot MVP",
   "nodes": [
     {
-      "id": "webhook-receive",
-      "name": "Webhook Chat",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        250,
-        300
-      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "av-chatbot",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
-      }
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Recibe POST del widget con {message, sessionId, history, businessName, tone}."
     },
     {
-      "id": "sheets-read-kb",
-      "name": "Leer KB",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [
-        450,
-        300
-      ],
       "parameters": {
-        "operation": "read",
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "TU_SHEET_ID"
+          "value": "YOUR_SHEET_ID"
         },
         "sheetName": {
           "__rl": true,
           "mode": "name",
           "value": "Conocimiento"
         },
-        "range": "Conocimiento!A:B",
         "options": {}
-      }
+      },
+      "id": "sheets-read-kb",
+      "name": "Leer KB",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        176,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_GOOGLE_CREDENTIAL"
+      },
+      "notes": "Lee la base de conocimiento del negocio desde Google Sheets (pestaña Conocimiento)."
     },
     {
-      "id": "format-prompt",
+      "parameters": {
+        "jsCode": "const wfData = $('Webhook').first().json.body;\nconst msg = wfData.message;\nconst userId = wfData.userId || 'anon';\nconst sessionId = wfData.sessionId || 'av_' + Date.now();\nconst businessName = wfData.businessName || 'Cala Blanca';\nconst tone = (wfData.tone || 'informal').toLowerCase();\nconst history = wfData.history || [];\n\n// Extraer nombre del mensaje actual\nlet visitorName = '';\nconst nameMatch = msg.match(/(?:me llamo|soy|mi nombre es|nombre:?)\\s*([A-Za-zÁÉÍÓÚÑáéíóúñ]{2,}(?:\\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]{2,}){0,2})/i);\nif (nameMatch) visitorName = nameMatch[1].trim();\nif (!visitorName) {\n  const simpleName = msg.match(/\\b(?:soy|me llamo)\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+)/i);\n  if (simpleName) visitorName = simpleName[1];\n}\n\n// Extraer contacto con validacion\nlet visitorContact = '';\nconst rawPhoneMatch = msg.match(/\\b(?:\\+?\\d{1,3}[-.\\s]?)?(\\d[\\d\\s.-]{7,}\\d)\\b/);\nconst phoneStr = rawPhoneMatch ? rawPhoneMatch[1] : '';\nconst phoneDigits = phoneStr.replace(/\\D/g, '');\nif (phoneDigits.length >= 9) visitorContact = phoneDigits;\nif (!visitorContact) {\n  const emailMatch = msg.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,})/i);\n  if (emailMatch) visitorContact = emailMatch[1];\n}\n\n// Buscar datos de contacto en historial\nlet hasContactData = !!(visitorName.length >= 2 || visitorContact.length >= 7);\nif (!hasContactData && history.length > 0) {\n  const lastUserMsgs = history.filter(h => h.role === 'user').slice(-2);\n  for (const h of lastUserMsgs) {\n    if (/(?:me llamo|soy|mi nombre|tel[eé]fono|celular|m[oó]vil|whatsapp|contacto|[\\d]{7,}|@)/i.test(h.content)) {\n      hasContactData = true;\n      if (!visitorName) {\n        const nm = h.content.match(/(?:me llamo|soy|mi nombre es)\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,30})/i);\n        if (nm) visitorName = nm[1].trim();\n      }\n      if (!visitorContact) {\n        const pm = h.content.match(/\\b(?:\\+?\\d{1,3}[-.\\s]?)?(\\d[\\d\\s.-]{7,}\\d)\\b/);\n        const pd = pm ? pm[1].replace(/\\D/g, '') : '';\n        if (pd.length >= 9) visitorContact = pd;\n        if (!visitorContact) {\n          const em = h.content.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,})/i);\n          if (em) visitorContact = em[1];\n        }\n      }\n      break;\n    }\n  }\n}\n\nconst kbRows = $('Leer KB').all();\n\n// Extraer config de Telegram desde la KB\nlet telegramToken = '', telegramChatId = '';\nif (kbRows && kbRows.length > 0) {\n  for (const r of kbRows) {\n    if (r.json.Tema === 'Telegram Token') telegramToken = r.json.Contenido;\n    if (r.json.Tema === 'Telegram Chat ID') telegramChatId = r.json.Contenido;\n  }\n}\nlet kbText = '';\nif (kbRows && kbRows.length > 0) {\n  kbText = kbRows.map(r => r.json.Tema + ': ' + r.json.Contenido).join('\\n');\n}\n\nconst toneInstruction = tone === 'formal'\n  ? 'Usa \"usted\" en vez de \"tú\". Sin coloquialismos ni emojis. Tono profesional.'\n  : 'Usa \"tú\". Tono cercano y de barrio. Puedes usar emojis ocasionalmente.';\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}. Responde de forma amable, natural y concisa. Usa la informacion del negocio para responder.\n\nBASE DE CONOCIMIENTO DEL NEGOCIO:\n${kbText}\n\nREGLAS DE ORO:\n- Responde en espanol, maximo 2 frases. Se breve y directo.\n- ${toneInstruction}\n- Si el visitante pregunta precios, disponibilidad o quiere reservar, pide sus datos para comprobar disponibilidad. Dile: \"Para confirmarte, necesito tu nombre y un telefono o email. ¿Me los compartes?\"\n- NUNCA ofrezcas conectar con una persona como primera respuesta cuando el visitante quiere reservar o pregunta precios. PRIMERO pide sus datos (nombre, telefono o email). Solo ofrece contacto humano si rechaza dar sus datos.\n- NUNCA pidas datos de contacto en el primer mensaje si el visitante solo saluda o pregunta info general\n- Si el visitante TE DA sus datos (nombre, telefono, email), confirmaselos amablemente y dile que le contactaran pronto\n- Si preguntan algo que no esta en la base de conocimiento Y no es sobre precios/reservas, se honesto y ofrece conectar con una persona\n- ${hasContactData ? 'YA TIENES los datos de contacto de este visitante. NO se los pidas de nuevo.' : ''}\n- Si el visitante rechaza dar sus datos, NO insistas. Sigue la conversacion con normalidad.\n\nIMPORTANTE: Al final de tu respuesta agrega SIEMPRE '||RESUMEN:' y en 1-2 frases resume que pregunto el visitante. Ejemplo: 'Son 42€. ||RESUMEN: Pregunto por el precio de la caldereta.' El sistema ocultara el resumen y los datos al usuario. Si el visitante dio su nombre o contacto, agregalos como ||DATOS: nombre=... telefono=... email=...`;\n\n// Construir chatInput para el LLM Chain (system + history + user)\nlet chatInput = systemPrompt + '\\n\\n';\nconst recentHistory = history.slice(-10);\nfor (const h of recentHistory) {\n  chatInput += (h.role === 'user' ? 'Usuario: ' : 'Asistente: ') + h.content + '\\n';\n}\nchatInput += 'Usuario: ' + msg;\n\nreturn [{\n  json: {\n    userId, sessionId, message: msg, visitorName, visitorContact,\n    hasContactData, businessName, tone, telegramToken, telegramChatId,\n    timestamp: new Date().toISOString(),\n    chatInput: chatInput,\n    systemPrompt: systemPrompt\n  }\n}];\n"
+      },
+      "id": "code-prepare",
       "name": "Prepare DeepSeek",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        650,
-        300
+        352,
+        0
       ],
-      "parameters": {
-        "language": "javaScript",
-        "jsCode": "const wfData = $('Webhook').first().json.body;\nconst msg = wfData.message;\nconst userId = wfData.userId || 'anon';\nconst sessionId = wfData.sessionId || 'av_' + Date.now();\nconst businessName = wfData.businessName || 'Cala Blanca';\nconst history = wfData.history || [];\n\nlet visitorName = '';\nconst nameMatch = msg.match(/(?:me llamo|soy|mi nombre es)\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+)*)/i);\nif (nameMatch) visitorName = nameMatch[1].trim();\n\nlet visitorContact = '';\nconst phoneMatch = msg.match(/(?:tel[eé]fono|celular|m[oó]vil|whatsapp|contacto|ll[aá]mame|mi numero|mi n[uú]mero)[^\\d]*(\\d{7,})/i);\nif (phoneMatch) visitorContact = phoneMatch[1];\nconst emailMatch = msg.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,})/i);\nif (emailMatch && !visitorContact) visitorContact = emailMatch[1];\n\nconst hasContactData = !!(visitorName || visitorContact);\n\nconst kbRows = $('Leer KB').all();\nlet kbText = '';\nif (kbRows && kbRows.length > 0) {\n  kbText = kbRows.map(r => r.json.Tema + ': ' + r.json.Contenido).join('\\n');\n}\n\nconst systemPrompt = `Eres el asistente virtual de ${businessName}...\nBASE DE CONOCIMIENTO DEL NEGOCIO:\n${kbText}\nPAUTAS: Responde en espanol, usa los datos de la KB, pide contacto si hay intencion de compra, no inventes`;\n\nconst messages = [{ role: 'system', content: systemPrompt }];\nconst recentHistory = history.slice(-8);\nfor (const h of recentHistory) messages.push({ role: h.role, content: h.content });\nmessages.push({ role: 'user', content: msg });\n\nreturn [{ json: { userId, sessionId, message: msg, visitorName, visitorContact, hasContactData, businessName, timestamp: new Date().toISOString(), deepseekPayload: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.7, max_tokens: 800 }) } }];"
-      }
+      "notes": "Nodo central. Extrae nombre/contacto con regex, construye system prompt con KB + reglas de lead capture."
     },
     {
-      "id": "deepseek-call",
-      "name": "DeepSeek API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        850,
-        300
-      ],
       "parameters": {
-        "method": "POST",
-        "url": "https://api.deepseek.com/v1/chat/completions",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer TU_DEEPSEEK_KEY"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ $json.deepseekPayload }}",
         "options": {}
+      },
+      "id": "deepseek-model",
+      "name": "DeepSeek Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        496,
+        192
+      ],
+      "credentials": {
+        "deepSeekApi": "YOUR_DEEPSEEK_CREDENTIAL"
       }
     },
     {
-      "id": "format-response",
+      "parameters": {
+        "options": {
+          "maxIterations": 1
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst prepData = $('Prepare DeepSeek').first().json;\nconst kbRows = $('Leer KB').all();\n\n// Detectar timeout/error del LLM vs respuesta normal\nconst isApiError = !data || (data.error && !data.text) || (data.message && !data.text);\nlet text = '';\nlet iaResumen = '';\nlet finalName = '', finalContact = '', finalHasContact = false;\nlet confianza = 'Media';\n\nif (isApiError) {\n  // Construir respuesta con datos de contacto del negocio\n  let telefono = '', email = '';\n  if (kbRows) {\n    for (const r of kbRows) {\n      if (r.json.Tema === 'Teléfono') telefono = r.json.Contenido;\n      if (r.json.Tema === 'Email') email = r.json.Contenido;\n    }\n  }\n  const business = prepData.businessName || 'Cala Blanca';\n  text = 'Lo siento, en este momento no puedo procesar tu consulta. Puedes contactar directamente con ' + business +\n    (telefono ? ' en ' + telefono : '') +\n    (email ? ' o por email a ' + email : '') +\n    '. Un miembro de nuestro equipo te atenderá encantado.';\n  confianza = 'Baja';\n} else {\n  let rawContent = data.text || data.output || data.choices?.[0]?.message?.content || '';\n  const rawReasoning = data.choices?.[0]?.message?.reasoning_content || '';\n  \n  // 1. Tag <response>\n  const responseTag = rawContent.match(/<response>([\\s\\S]*?)<\\/response>/i);\n  if (responseTag) { text = responseTag[1].trim(); }\n  \n  // 2. Marcador 'R:'\n  if (!text) {\n    const rMatch = rawContent.match(/(?:^|\\n)\\s*R:\\s*(.+?)(?:\\n|$)/m);\n    if (rMatch) text = rMatch[1].trim();\n  }\n  \n  // Extraer datos estructurados del LLM: ||DATOS: nombre=X telefono=Y email=Z\n  let llmName = '', llmContact = '';\n  const datosMatch = rawContent.match(/\\|\\|DATOS:\\s*(.+)$/m);\n  if (datosMatch) {\n    const datosStr = datosMatch[1];\n    const nombreMatch = datosStr.match(/nombre=([^=]+?)(?:\\s+telefono=|\\s+email=|$)/i);\n    const telMatch = datosStr.match(/telefono=([\\d\\s]+)/i);\n    const emailMatch = datosStr.match(/email=([^\\s,]+)/i);\n    if (nombreMatch) llmName = nombreMatch[1].trim();\n    if (telMatch) llmContact = telMatch[1].replace(/\\s/g, '');\n    if (!llmContact && emailMatch) llmContact = emailMatch[1].trim();\n    rawContent = rawContent.replace(/\\|\\|DATOS:[^\\n]*\\n?/g, '').trim();\n  }\n  finalName = llmName || prepData.visitorName || '';\n  finalContact = llmContact || prepData.visitorContact || '';\n  finalHasContact = !!(finalName.length >= 2 || finalContact.length >= 7);\n  \n  // Extraer resumen IA del separador ||RESUMEN:\n  if (rawContent.includes('||RESUMEN:')) {\n    const parts = rawContent.split('||RESUMEN:');\n    rawContent = parts[0].trim();\n    iaResumen = (parts[1] || '').trim();\n  }\n  \n  // 3. Usar el content directamente\n  if (!text && rawContent && rawContent.trim().length >= 5) {\n    text = rawContent.trim();\n  }\n  \n  // 4. Fallback si no hay content pero si razonamiento\n  if (!text && rawReasoning && rawReasoning.length > 20) {\n    let telefono = '', email = '';\n    if (kbRows) {\n      for (const r of kbRows) {\n        if (r.json.Tema === 'Teléfono') telefono = r.json.Contenido;\n        if (r.json.Tema === 'Email') email = r.json.Contenido;\n      }\n    }\n    const fallbackBiz = prepData.businessName || 'Cala Blanca';\n    text = 'Disculpa, necesito algunos datos para ayudarte mejor.';\n  }\n  \n  if (!text) text = rawContent || '';\n  confianza = (data.choices?.[0]?.finish_reason === 'stop' || data.text || data.output) ? 'Alta' : 'Media';\n\n  if (!text || text.trim().length < 10) {\n    text = 'Disculpa, no he podido encontrar una respuesta adecuada.';\n    confianza = 'Baja';\n  }\n}\n\nlet estado = 'Rebote';\nif (finalHasContact) {\n  estado = 'Lead caliente';\n} else if (prepData.message && prepData.message.length > 5) {\n  estado = 'Consulta';\n}\n\nconst temas = [];\nif (/precio|cu[eá]nto|cuesta|€|euros/i.test(prepData.message)) temas.push('Precios');\nif (/reserva|mesa|disponib|fecha|cena|comida/i.test(prepData.message)) temas.push('Reservas');\nif (/carta|men[uú]|plato|comida|especialidad/i.test(prepData.message)) temas.push('Carta/Menú');\nif (/horario|abren|cierran/i.test(prepData.message)) temas.push('Horario');\nif (/donde|c[oó]mo llegar|direcci[oó]n|ubicaci[oó]n/i.test(prepData.message)) temas.push('Ubicación');\nif (temas.length === 0) temas.push('General');\n\nconst resumen = iaResumen || (temas.join(', ') !== 'General' ? temas.join(', ') + ': ' : '') + '\"' + (prepData.message || '').substring(0, 150).replace(/\"/g, '') + '\"';\n\nreturn [{\n  json: {\n    response: text,\n    sessionId: prepData.sessionId || 'unknown',\n    visitorName: finalName,\n    visitorContact: finalContact,\n    hasContactData: finalHasContact,\n    businessName: prepData.businessName || 'Cala Blanca',\n    userMessage: prepData.message || '',\n    timestamp: prepData.timestamp || '',\n    estado: estado,\n    resumen: resumen,\n    temas: temas.join(', '),\n    confianza: confianza,\n    leadCaptured: finalHasContact\n  }\n}];\n"
+      },
+      "id": "code-extract-v2",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1050,
-        300
+        768,
+        0
       ],
-      "parameters": {
-        "language": "javaScript",
-        "jsCode": "const data = $input.first().json;\nconst text = data.choices?.[0]?.message?.content || 'Error';\nconst prepData = $('Prepare DeepSeek').first().json;\n\nlet estado = 'Rebote';\nif (prepData.hasContactData) estado = 'Lead caliente';\nelse if (prepData.message && prepData.message.length > 5) estado = 'Consulta';\n\nconst frases = text.split(/[.!?]\\s+/);\nconst resumen = frases.slice(0, 2).join('. ').substring(0, 200);\n\nconst temas = [];\nif (/precio|cuánto|cuesta/i.test(prepData.message)) temas.push('Precios');\nif (/reserva|mesa|disponib/i.test(prepData.message)) temas.push('Reservas');\nif (/carta|menú|plato/i.test(prepData.message)) temas.push('Carta/Menú');\nif (/horario|abren/i.test(prepData.message)) temas.push('Horario');\nif (temas.length === 0) temas.push('General');\n\nconst confianza = data.choices?.[0]?.finish_reason === 'stop' ? 'Alta' : 'Media';\n\nreturn [{ json: { response: text, sessionId: prepData.sessionId, visitorName: prepData.visitorName || '', visitorContact: prepData.visitorContact || '', hasContactData: prepData.hasContactData, businessName: prepData.businessName, userMessage: prepData.message, timestamp: prepData.timestamp, estado, resumen, temas: temas.join(', '), confianza } }];"
-      }
+      "notes": "Procesa respuesta LLM. Extrae ||RESUMEN: y ||DATOS:. Clasifica lead y temas."
     },
     {
-      "id": "sheets-crm",
-      "name": "Google Sheets CRM",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [
-        1250,
-        300
-      ],
       "parameters": {
-        "operation": "append",
+        "options": {}
+      },
+      "id": "set-crm",
+      "name": "Map CRM Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        944,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-now",
+      "name": "Respond Now",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        992,
+        -192
+      ],
+      "notes": "Responde al webhook inmediatamente. El CRM sigue async."
+    },
+    {
+      "parameters": {
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "TU_SHEET_ID"
+          "value": "YOUR_SHEET_ID"
         },
         "sheetName": {
           "__rl": true,
           "mode": "name",
           "value": "CRM"
         },
-        "range": "CRM!A:G",
-        "columns": {
-          "mappingMode": "defineBelow",
-          "schema": [
-            {
-              "id": "fecha",
-              "displayName": "Fecha y hora",
-              "type": "string",
-              "defaultMatch": true
-            },
-            {
-              "id": "nombre",
-              "displayName": "Nombre del visitante",
-              "type": "string"
-            },
-            {
-              "id": "contacto",
-              "displayName": "Contacto",
-              "type": "string"
-            },
-            {
-              "id": "resumen",
-              "displayName": "Resumen conversación",
-              "type": "string"
-            },
-            {
-              "id": "estado",
-              "displayName": "Estado del lead",
-              "type": "string"
-            },
-            {
-              "id": "temas",
-              "displayName": "Temas",
-              "type": "string"
-            },
-            {
-              "id": "confianza",
-              "displayName": "Confianza",
-              "type": "string"
-            }
-          ],
-          "value": {
-            "fecha": "={{ $json.timestamp }}",
-            "nombre": "={{ $json.visitorName }}",
-            "contacto": "={{ $json.visitorContact }}",
-            "resumen": "={{ $json.resumen }}",
-            "estado": "={{ $json.estado }}",
-            "temas": "={{ $json.temas }}",
-            "confianza": "={{ $json.confianza }}"
-          }
-        },
         "options": {}
+      },
+      "id": "sheets-read-crm",
+      "name": "Leer CRM Session",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1104,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_GOOGLE_CREDENTIAL"
       }
     },
     {
-      "id": "if-lead",
-      "name": "¿Es Lead?",
+      "parameters": {
+        "jsCode": "const crmRows = $input.all();\nconst formatData = $('Format Response').first().json;\nconst currentSessionId = $('Prepare DeepSeek').first().json.sessionId;\n\nlet sessionExists = false;\nlet existingRow = -1;\n\nfor (let i = 0; i < crmRows.length; i++) {\n  const rowJson = crmRows[i].json;\n  const values = Object.values(rowJson);\n  for (const val of values) {\n    if (val && val.toString().trim() === currentSessionId) {\n      sessionExists = true;\n      existingRow = 3 + i;\n      break;\n    }\n  }\n  if (sessionExists) break;\n}\n\nreturn [{\n  json: {\n    sessionExists, existingRow, sessionId: currentSessionId,\n    visitorName: formatData.visitorName || '',\n    visitorContact: formatData.visitorContact || '',\n    resumen: formatData.resumen || '',\n    estado: formatData.estado || 'Rebote',\n    temas: formatData.temas || 'General',\n    confianza: formatData.confianza || 'Media',\n    timestamp: formatData.timestamp || '',\n    hasContactData: formatData.hasContactData || false,\n    response: formatData.response || ''\n  }\n}];\n"
+      },
+      "id": "code-check-session",
+      "name": "Check Session Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.sessionExists }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "if-session-exists",
+      "name": "¿Existe Sesión?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1450,
-        400
+        1472,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CRM"
+        },
+        "columnToMatchOn": "Session ID",
+        "valueToMatchOn": "={{ $json.sessionId }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Session ID",
+              "fieldValue": "={{ $json.sessionId }}"
+            },
+            {
+              "column": "Fecha y Hora",
+              "fieldValue": "={{ $json.timestamp }}"
+            },
+            {
+              "column": "Nombre Visitante",
+              "fieldValue": "={{ $json.visitorName }}"
+            },
+            {
+              "column": "Contacto Visitante",
+              "fieldValue": "={{ $json.visitorContact }}"
+            },
+            {
+              "column": "Resumen Conversación",
+              "fieldValue": "={{ $json.resumen }}"
+            },
+            {
+              "column": "Estado del Lead",
+              "fieldValue": "={{ $json.estado }}"
+            },
+            {
+              "column": "Temas Preguntados",
+              "fieldValue": "={{ $json.temas }}"
+            },
+            {
+              "column": "Confianza Chatbot",
+              "fieldValue": "={{ $json.confianza }}"
+            }
+          ]
+        },
+        "options": {
+          "locationDefine": {
+            "values": {
+              "headerRow": 3,
+              "firstDataRow": 4
+            }
+          }
+        }
+      },
+      "id": "sheets-update-crm",
+      "name": "Update CRM Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1664,
+        -128
       ],
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_GOOGLE_CREDENTIAL"
+      },
+      "notes": "⚠️ REQUIERE headerRow:3 en options.locationDefine. Sin esto, busca headers en fila 1 y falla silenciosamente."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "CRM"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha y Hora": "={{ $json.timestamp }}",
+            "Nombre Visitante": "={{ $json.visitorName }}",
+            "Contacto Visitante": "={{ $json.visitorContact }}",
+            "Resumen Conversación": "={{ $json.resumen }}",
+            "Estado del Lead": "={{ $json.estado }}",
+            "Temas Preguntados": "={{ $json.temas }}",
+            "Confianza Chatbot": "={{ $json.confianza }}",
+            "Session ID": "={{ $json.sessionId }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "locationDefine": {
+            "values": {
+              "headerRow": 3
+            }
+          }
+        }
+      },
+      "id": "sheets-append-native",
+      "name": "Append CRM Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1664,
+        16
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": "YOUR_GOOGLE_CREDENTIAL"
+      }
+    },
+    {
       "parameters": {
         "conditions": {
+          "combinator": "and",
           "conditions": [
             {
               "id": "cond-1",
@@ -202,58 +339,56 @@
           ],
           "options": {
             "caseSensitive": true,
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 1
           }
-        }
-      }
+        },
+        "options": {}
+      },
+      "id": "if-lead",
+      "name": "¿Es Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        16
+      ]
     },
     {
-      "id": "telegram-notify",
-      "name": "Telegram Notify",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1650,
-        200
-      ],
       "parameters": {
         "method": "POST",
-        "url": "https://api.telegram.org/botTU_TELEGRAM_TOKEN/sendMessage",
+        "url": "={{ 'https://api.telegram.org/bot' + $('Prepare DeepSeek').first().json.telegramToken + '/sendMessage' }}",
         "sendBody": true,
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
             {
               "name": "chat_id",
-              "value": "TU_CHAT_ID"
+              "value": "={{ $('Prepare DeepSeek').first().json.telegramChatId }}"
             },
             {
               "name": "text",
-              "value": "={{ '🔥 LEAD: ' + ($('Format Response').first().json.visitorName || 'Sin nombre') + ' - ' + ($('Format Response').first().json.visitorContact || 'Sin contacto') + ' | ' + $('Prepare DeepSeek').first().json.message }}"
+              "value": "={{ '🔥 LEAD: ' + $('Format Response').first().json.visitorName + ' | 📞 ' + $('Format Response').first().json.visitorContact }}"
             }
           ]
         },
-        "sendHeaders": false,
         "options": {}
-      }
-    },
-    {
-      "id": "output-response",
-      "name": "Output Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      },
+      "id": "tg-v3",
+      "name": "Telegram Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [
-        1850,
-        300
+        2144,
+        -144
       ],
-      "parameters": {
-        "language": "javaScript",
-        "jsCode": "const formatData = $('Format Response').first().json;\nreturn [{ json: { response: formatData.response } }];"
-      }
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
     }
   ],
   "connections": {
-    "Webhook Chat": {
+    "Webhook": {
       "main": [
         [
           {
@@ -279,14 +414,25 @@
       "main": [
         [
           {
-            "node": "DeepSeek API",
+            "node": "AI Agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "DeepSeek API": {
+    "DeepSeek Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
       "main": [
         [
           {
@@ -301,14 +447,83 @@
       "main": [
         [
           {
-            "node": "Google Sheets CRM",
+            "node": "Map CRM Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Now",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Google Sheets CRM": {
+    "Map CRM Fields": {
+      "main": [
+        [
+          {
+            "node": "Leer CRM Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer CRM Session": {
+      "main": [
+        [
+          {
+            "node": "Check Session Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Session Exists": {
+      "main": [
+        [
+          {
+            "node": "¿Existe Sesión?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Existe Sesión?": {
+      "main": [
+        [
+          {
+            "node": "Update CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM Row": {
+      "main": [
+        [
+          {
+            "node": "¿Es Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append CRM Row": {
       "main": [
         [
           {
@@ -327,40 +542,13 @@
             "type": "main",
             "index": 0
           }
-        ],
-        [
-          {
-            "node": "Output Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Telegram Notify": {
-      "main": [
-        [
-          {
-            "node": "Output Response",
-            "type": "main",
-            "index": 0
-          }
         ]
       ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "tags": [
-    {
-      "name": "auxovelari"
-    },
-    {
-      "name": "chatbot"
-    },
-    {
-      "name": "mvp"
-    }
-  ]
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
 }
