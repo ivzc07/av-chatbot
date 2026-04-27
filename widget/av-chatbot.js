@@ -3,7 +3,7 @@
  * Widget de chat con IA - Embebible con 1 línea de código
  * 
  * Uso:
- * <script src="av-chatbot.js" data-business="Restaurante Sol" data-welcome="¡Hola! ¿En qué puedo ayudarte?" data-color="#2E86AB" data-endpoint="https://tu-n8n.com/webhook/chat"></script>
+ * <script src="av-chatbot.js" data-business="Restaurante Sol" data-welcome="¡Hola! ¿En qué puedo ayudarte?" data-color="#2E86AB" data-tone="informal" data-endpoint="https://tu-n8n.com/webhook/chat"></script>
  */
 
 (function() {
@@ -18,6 +18,7 @@
     welcomeMessage: scriptTag?.dataset?.welcome || '¡Hola! Soy el asistente virtual. ¿En qué puedo ayudarte?',
     primaryColor: scriptTag?.dataset?.color || '#2E86AB',
     endpoint: scriptTag?.dataset?.endpoint || '',
+    tone: scriptTag?.dataset?.tone || 'informal',
   };
 
   // ============================================================
@@ -436,6 +437,7 @@
           message: text,
           history: messageHistory.slice(-10),
           businessName: CONFIG.businessName,
+          tone: CONFIG.tone,
         }),
       });
 
