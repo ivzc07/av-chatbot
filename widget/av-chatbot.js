@@ -28,6 +28,7 @@
   let sessionId = sessionStorage.getItem('av_sessionId') || generateId();
   sessionStorage.setItem('av_sessionId', sessionId);
   let messageHistory = [];
+  let leadCapturedShown = false;
 
   function generateId() {
     return 'av_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -180,6 +181,19 @@
       font-size: 13px;
     }
 
+    .av-message-lead-captured {
+      align-self: center;
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 12px;
+      color: #2e7d32;
+      font-size: 13px;
+      text-align: center;
+      padding: 14px 18px;
+      max-width: 90%;
+      animation: avFadeIn 0.4s ease;
+    }
+
     .av-chat-footer {
       padding: 12px 16px;
       border-top: 1px solid #e8e8e8;
@@ -252,7 +266,7 @@
     }
 
     /* Responsive: móvil */
-    @media (max-width: 480px) {
+    @media (max-width: 768px) {
       #av-chatbot-container {
         bottom: 10px;
         right: 10px;
@@ -382,6 +396,17 @@
     scrollToBottom();
   }
 
+  function showLeadCaptured() {
+    if (leadCapturedShown) return;
+    leadCapturedShown = true;
+    const messagesEl = document.getElementById('av-messages');
+    const div = document.createElement('div');
+    div.className = 'av-message av-message-lead-captured';
+    div.innerHTML = '✅ <strong>¡Tus datos se han registrado!</strong><br>Un miembro de nuestro equipo te contactará pronto. Mientras tanto, puedes seguir preguntándome lo que necesites.';
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
   function showTyping() {
     const messagesEl = document.getElementById('av-messages');
     const div = document.createElement('div');
@@ -450,6 +475,8 @@
 
       const data = await response.json();
       const reply = data.response || data.reply || data.message || data.text || 'Lo siento, no pude procesar tu mensaje.';
+      
+      if (data.leadCaptured) showLeadCaptured();
       
       addMessage(reply, 'bot');
       messageHistory.push({ role: 'assistant', content: reply });
