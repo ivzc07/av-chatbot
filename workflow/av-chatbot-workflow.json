@@ -1,5 +1,5 @@
 {
-  "name": "AuxoVelari - Chatbot MVP",
+  "name": "Chatbot MVP",
   "nodes": [
     {
       "parameters": {
@@ -159,7 +159,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crmRows = $input.all();\nconst formatData = $('Format Response').first().json;\nconst currentSessionId = $('Prepare DeepSeek').first().json.sessionId;\n\nlet sessionExists = false;\nlet existingRow = -1;\n\nfor (let i = 0; i < crmRows.length; i++) {\n  const rowJson = crmRows[i].json;\n  const values = Object.values(rowJson);\n  for (const val of values) {\n    if (val && val.toString().trim() === currentSessionId) {\n      sessionExists = true;\n      existingRow = 3 + i;\n      break;\n    }\n  }\n  if (sessionExists) break;\n}\n\nreturn [{\n  json: {\n    sessionExists, existingRow, sessionId: currentSessionId,\n    visitorName: formatData.visitorName || '',\n    visitorContact: formatData.visitorContact || '',\n    resumen: formatData.resumen || '',\n    estado: formatData.estado || 'Rebote',\n    temas: formatData.temas || 'General',\n    confianza: formatData.confianza || 'Media',\n    timestamp: formatData.timestamp || '',\n    hasContactData: formatData.hasContactData || false,\n    response: formatData.response || ''\n  }\n}];\n"
+        "jsCode": "const crmRows = $input.all();\nconst formatData = $('Format Response').first().json;\nconst currentSessionId = $('Prepare DeepSeek').first().json.sessionId;\n\nlet sessionExists = false;\nlet existingRow = -1;\nlet existingTemas = '';\n\nfor (let i = 0; i < crmRows.length; i++) {\n  const rowJson = crmRows[i].json;\n  const values = Object.values(rowJson);\n  for (const val of values) {\n    if (val && val.toString().trim() === currentSessionId) {\n      sessionExists = true;\n      existingRow = 3 + i;\n      existingTemas = rowJson['Temas Preguntados'] || rowJson.temas || rowJson.col_6 || '';\n      break;\n    }\n  }\n  if (sessionExists) break;\n}\n\nreturn [{\n  json: {\n    sessionExists, existingRow, sessionId: currentSessionId,\n    visitorName: formatData.visitorName || '',\n    visitorContact: formatData.visitorContact || '',\n    resumen: formatData.resumen || '',\n    estado: formatData.estado || 'Rebote',\n    temas: (function() {\n      const newTemas = (formatData.temas || 'General').split(', ').filter(function(t) { return t; });\n      const oldTemas = existingTemas ? existingTemas.split(', ').filter(function(t) { return t; }) : [];\n      if (newTemas.length === 1 && newTemas[0] === 'General' && oldTemas.some(function(t) { return t !== 'General'; })) {\n        return existingTemas;\n      }\n      var merged = [];\n      oldTemas.filter(function(t) { return t !== 'General'; }).forEach(function(t) { if (merged.indexOf(t) === -1) merged.push(t); });\n      newTemas.filter(function(t) { return t !== 'General'; }).forEach(function(t) { if (merged.indexOf(t) === -1) merged.push(t); });\n      return merged.length > 0 ? merged.join(', ') : 'General';\n    })(),\n    confianza: formatData.confianza || 'Media',\n    timestamp: formatData.timestamp || '',\n    hasContactData: formatData.hasContactData || false,\n    response: formatData.response || ''\n  }\n}];\n"
       },
       "id": "code-check-session",
       "name": "Check Session Exists",
@@ -302,7 +302,7 @@
           }
         },
         "options": {
-          "cellFormat": "USER_ENTERED",
+          "cellFormat": "RAW",
           "locationDefine": {
             "values": {
               "headerRow": 3

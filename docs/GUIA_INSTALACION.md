@@ -1,4 +1,4 @@
-# Guía de Instalación — AuxoVelari Chatbot
+# Guía de Instalación — Chatbot Web con IA
 
 Esta guía explica cómo instalar el chatbot para un nuevo cliente desde cero. Tiempo objetivo: menos de 3 horas.
 
@@ -24,7 +24,7 @@ Antes de empezar, necesitas tener acceso a:
 - [ ] **DeepSeek API key** — Regístrate en [platform.deepseek.com](https://platform.deepseek.com)
 - [ ] **Google Cloud Console** — Con Google Sheets API habilitada
 - [ ] **Telegram Bot Token** — Crear bot con [@BotFather](https://t.me/BotFather)
-- [ ] **Servidor web** — Para alojar el archivo `av-chatbot.js` (puede ser Hetzner CX33 con Docker, o cualquier hosting estático)
+- [ ] **Servidor web** — Para alojar el archivo `av-chatbot.js` (VPS, hosting estático, o cualquier servidor con HTTPS)
 
 ---
 
@@ -35,23 +35,26 @@ Antes de empezar, necesitas tener acceso a:
 1. Abre tu instancia de n8n
 2. Ve a **Workflows → Import from File**
 3. Selecciona `workflow/av-chatbot-workflow.json`
-4. El workflow se importará con el nombre "AuxoVelari - Chatbot Backend"
+4. El workflow se importará con el nombre "Chatbot MVP"
 
 ### 2.2 Configurar credenciales en el workflow
 
-El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
+El workflow usa credenciales gestionadas por n8n (no necesitas editar nodos manualmente).
 
-#### Nodo "DeepSeek V3.2"
-- Ya está preconfigurado con el endpoint de DeepSeek
-- Cambia el API Key en los headers si usas otro proveedor
+1. Ve a **Settings → Credentials** en n8n
+2. Añade estas credenciales:
 
-#### Nodo "Telegram Notificación"
-- Cambia `chat_id` por el ID de Telegram del dueño del negocio
-- Cambia el token del bot en la URL
+#### Credencial: DeepSeek API
+- Tipo: `DeepSeek API`
+- Pega tu API key de DeepSeek (la obtendrás en el paso 3)
 
-#### Nodo "Google Sheets" (por añadir)
-- Añádelo después de "Procesar Respuesta"
-- Conéctalo con una Google Service Account
+#### Credencial: Google Sheets OAuth2
+- Tipo: `Google Sheets OAuth2`
+- Conéctala con la cuenta de Google que tiene acceso al Drive
+
+3. En el workflow, cada nodo ya apunta a la credencial correcta:
+   - `DeepSeek Model` → credencial `DeepSeek API`
+   - `Leer KB`, `Append CRM Row`, `Update CRM Row` → credencial `Google Sheets OAuth2`
 
 ### 2.3 Activar el workflow
 
@@ -67,7 +70,7 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 2. Crea una cuenta o inicia sesión
 3. Ve a **API Keys** → **Create new key**
 4. Copia la API key
-5. Pégala en el nodo "DeepSeek V3.2" del workflow (header `Authorization: Bearer TU_API_KEY`)
+5. En n8n, ve a **Settings → Credentials → DeepSeek API** y pega la key
 6. Recarga saldo si es necesario (mínimo recomendado: $5 para desarrollo)
 
 ---
@@ -87,34 +90,26 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 9. Haz clic en la service account creada → **Keys → Add Key → JSON**
 10. Descarga el archivo JSON
 
-### 4.2 Crear la hoja de CRM
+### 4.2 Crear y formatear la hoja de CRM
 
-1. Crea una nueva Google Sheet en Google Drive
+1. Crea una Google Sheet vacía en Google Drive
 2. Ponle nombre: `AV-CRM-[NOMBRE_CLIENTE]`
-3. Añade estas columnas en la fila 1:
-
-| Fecha/Hora | Visitante | Contacto | Resumen | Estado | Temas | Confianza |
-|---|---|---|---|---|---|---|
-| (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) | (vacío) |
-
-4. Comparte la hoja con el email de la service account (Editor)
-5. Copia el ID de la hoja (está en la URL: `https://docs.google.com/spreadsheets/d/EL_ID/edit`)
+3. Compártela con el email de tu service account como **Editor**
+4. Copia el ID de la hoja (está en la URL: `https://docs.google.com/spreadsheets/d/EL_ID/edit`)
+5. Ejecuta el script de formateo:
+   ```bash
+   python3 scripts/create-client-sheet.py EL_ID "Nombre del Negocio"
+   ```
+6. El script configura automáticamente: panel resumen, headers, colores condicionales, pestaña Conocimiento
 
 ### 4.3 Formatear la hoja (demo-ready)
 
-1. Selecciona la columna **Estado (E)**
-2. Ve a **Formato → Formato condicional**
-3. Añade reglas:
-   - Si el texto contiene "Lead caliente" → fondo verde claro
-   - Si el texto contiene "Consulta" → fondo amarillo claro
-   - Si el texto contiene "Rebote" → fondo gris claro
-4. Añade un panel resumen en las primeras filas:
-   - A1: "📊 RESUMEN CRM"
-   - A2: "Total visitantes:"
-   - A3: "Leads captados:"
-   - A4: "Tasa conversión:"
-5. Fija la fila de encabezado: **Ver → Fijar → 1 fila**
-6. Ordena por fecha: Datos → Ordenar por columna A (Z→A)
+El script ya lo hace automáticamente. Si necesitas verificarlo manualmente:
+
+1. Columna **Estado del Lead (E)** tiene formato condicional: verde (Lead caliente), amarillo (Consulta), gris (Rebote)
+2. Panel resumen en filas 1-2: total visitantes, leads captados, tasa de conversión (fórmulas)
+3. Fila de encabezado fijada (fila 3)
+4. Ordenado por fecha descendente
 
 ---
 
@@ -135,13 +130,15 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 3. El bot responde con el Chat ID numérico
 4. Guarda ese número
 
-### 5.3 Actualizar el workflow
+### 5.3 Configurar en Google Sheets
 
-1. En el nodo "Telegram Notificación", cambia la URL:
-   ```
-   https://api.telegram.org/botTOKEN_DEL_BOT/sendMessage
-   ```
-2. En el body JSON, cambia `chat_id` por el ID del dueño
+El workflow lee el token y el Chat ID desde la pestaña "Conocimiento" de Google Sheets.
+
+1. Abre la hoja de Google Sheets del cliente
+2. Ve a la pestaña **Conocimiento**
+3. Añade estas filas:
+   - `Telegram Token` | `TU_TOKEN_DEL_BOT`
+   - `Telegram Chat ID` | `ID_NUMERICO_DEL_DUENO`
 
 ---
 
@@ -151,9 +148,9 @@ El workflow importado tiene 3 nodos HTTP Request que necesitan configuración:
 
 Sube `widget/av-chatbot.js` a tu servidor. Opciones:
 
-- **Hetzner CX33 (Docker):** Copia a `/var/www/html/widget/av-chatbot.js` en el contenedor nginx
+- **VPS con nginx/Apache:** Copia a `/var/www/html/widget/av-chatbot.js`
 - **GitHub Pages:** Sube a un repo y usa la URL raw
-- **CDN:** Cualquier hosting de archivos estáticos
+- **CDN / Hosting:** Cualquier hosting de archivos estáticos con HTTPS
 
 ### 6.2 Añadir la línea de instalación
 
@@ -164,6 +161,7 @@ En el `<head>` o justo antes de `</body>` de la web del cliente, añade:
         data-business="NOMBRE_DEL_NEGOCIO"
         data-welcome="¡Hola! Soy el asistente virtual de NOMBRE_DEL_NEGOCIO. ¿En qué puedo ayudarte?"
         data-color="#COLOR_PRINCIPAL"
+        data-tone="informal"
         data-endpoint="https://TU_N8N/webhook/av-chatbot">
 </script>
 ```
@@ -175,6 +173,7 @@ En el `<head>` o justo antes de `</body>` de la web del cliente, añade:
 | `data-business` | Nombre del negocio (aparece en cabecera) | `Mi Negocio 🏖️` |
 | `data-welcome` | Mensaje de bienvenida al abrir el chat | `¡Hola! ¿En qué puedo ayudarte?` |
 | `data-color` | Color principal del widget (hex) | `#2E86AB` |
+| `data-tone` | Tono de la conversación: `informal` (tú, emojis) o `formal` (usted, profesional) | `informal` |
 | `data-endpoint` | URL del webhook de n8n | `https://n8n.ejemplo.com/webhook/av-chatbot` |
 
 ---
@@ -216,4 +215,4 @@ Después de instalar, verifica cada paso:
 
 ---
 
-AuxoVelari · Abril 2026
+Chatbot Web · Abril 2026

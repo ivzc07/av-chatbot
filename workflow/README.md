@@ -1,6 +1,6 @@
-# AuxoVelari Chatbot - n8n Workflow
+# Chatbot MVP - n8n Workflow
 
-Workflow de n8n que implementa el chatbot MVP de AuxoVelari. Procesa mensajes vía webhook, genera respuestas con IA (DeepSeek), y gestiona leads en Google Sheets.
+Workflow de n8n que implementa el chatbot con IA. Procesa mensajes vía webhook, genera respuestas con DeepSeek, y gestiona leads en Google Sheets.
 
 ## Arquitectura
 

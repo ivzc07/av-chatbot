@@ -1,4 +1,4 @@
-# Checklist de Instalación — AuxoVelari Chatbot
+# Checklist de Instalación — Chatbot Web con IA
 
 Cliente: ____________________  
 Fecha: ____________________  
@@ -12,8 +12,8 @@ Instalador: ____________________
 - [ ] Crear API key de DeepSeek
 - [ ] Verificar saldo de DeepSeek ($5 mínimo)
 - [ ] Tener acceso al Google Cloud Console
-- [ ] Tener acceso al Google Drive de AuxoVelari
-- [ ] Tener servidor web disponible (Hetzner CX33)
+- [ ] Tener acceso a Google Drive (para crear la hoja CRM)
+- [ ] Tener servidor web disponible (hosting, VPS, etc.)
 
 ---
 
@@ -21,9 +21,8 @@ Instalador: ____________________
 
 - [ ] Abrir n8n
 - [ ] Importar `workflow/av-chatbot-workflow.json`
-- [ ] Configurar API key de DeepSeek en nodo "DeepSeek V3.2"
-- [ ] Configurar token de Telegram en nodo "Telegram Notificación"
-- [ ] Configurar Chat ID en nodo "Telegram Notificación"
+- [ ] Configurar credencial DeepSeek API (Settings → Credentials → DeepSeek API)
+- [ ] Configurar credencial Google Sheets OAuth2 (Settings → Credentials → Google Sheets)
 - [ ] Activar workflow
 - [ ] Copiar URL del webhook: `________________________________`
 
@@ -39,6 +38,7 @@ Instalador: ____________________
         data-business="________________________________"
         data-welcome="________________________________"
         data-color="#__________"
+        data-tone="informal"
         data-endpoint="________________________________">
 </script>
 ```
@@ -52,15 +52,10 @@ Instalador: ____________________
 
 ## Google Sheets — CRM
 
-- [ ] Habilitar Google Sheets API en Cloud Console
-- [ ] Crear Service Account
-- [ ] Descargar JSON de credenciales
-- [ ] Crear nueva Google Sheet: `AV-CRM-[NOMBRE_CLIENTE]`
-- [ ] Añadir columnas: Fecha/Hora, Visitante, Contacto, Resumen, Estado, Temas, Confianza
-- [ ] Formatear columna Estado (verde/amarillo/gris)
-- [ ] Añadir panel resumen (filas superiores)
-- [ ] Fijar fila de encabezado
-- [ ] Compartir hoja con email de service account (Editor)
+- [ ] Crear Google Sheet vacía: `CRM-[NOMBRE_CLIENTE]`
+- [ ] Compartir con el email de tu service account como Editor
+- [ ] Ejecutar `python3 scripts/create-client-sheet.py <SHEET_ID> "Nombre del Negocio"`
+- [ ] Rellenar datos del negocio en pestaña "Conocimiento"
 - [ ] Anotar ID de la hoja: `________________________________`
 
 ---
@@ -71,6 +66,7 @@ Instalador: ____________________
 - [ ] Anotar token: `________________________________`
 - [ ] Dueño obtiene Chat ID con @userinfobot
 - [ ] Anotar Chat ID: `________________________________`
+- [ ] Añadir `Telegram Token` y `Telegram Chat ID` en pestaña "Conocimiento" de Google Sheets
 - [ ] Verificar: dueño envía mensaje al bot → OK
 
 ---
@@ -103,4 +99,4 @@ Instalador: ____________________
 
 ---
 
-AuxoVelari · Abril 2026
+Chatbot Web · Abril 2026

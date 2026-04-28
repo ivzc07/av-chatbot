@@ -1,4 +1,4 @@
-# AuxoVelari Chatbot — MVP
+# Chatbot Web con IA — MVP
 
 Widget de chat con IA para webs de negocio. Entiende lenguaje natural, responde usando la base de conocimiento del negocio, capta leads y registra todo en Google Sheets. Notifica al dueño por Telegram.
 
@@ -31,6 +31,7 @@ av-chatbot/
         data-business="Mi Negocio"
         data-welcome="¡Hola! ¿En qué puedo ayudarte?"
         data-color="#2E86AB"
+        data-tone="informal"
         data-endpoint="https://TU-N8N/webhook/av-chatbot">
 </script>
 ```
@@ -39,21 +40,28 @@ av-chatbot/
 3. Configura las credenciales (DeepSeek, Google Sheets, Telegram)
 4. Activa el workflow
 
-## Workflow (7 nodos)
+## Workflow (15 nodos)
 
 ```
-Webhook Chat → Prepare DeepSeek → DeepSeek API → Format Response → Google Sheets CRM → Telegram Notify → Output Response
+Webhook Chat → Leer KB → Prepare DeepSeek → DeepSeek Model + AI Agent → Format Response
+                                                                              ├→ Respond Now (respuesta inmediata ~4-5s)
+                                                                              └→ Map CRM → Leer CRM → Check Session → Update/Append CRM → ¿Es Lead? → Telegram
 ```
 
 | Nodo | Descripción |
 |------|-------------|
-| Webhook Chat | Recibe mensajes del widget (POST) |
-| Prepare DeepSeek | Construye system prompt con info del negocio, detecta leads |
-| DeepSeek API | Llama a DeepSeek V3.2 (raw body, autenticación por header) |
-| Format Response | Extrae respuesta, pasa datos a Sheets y Telegram |
-| Google Sheets CRM | Guarda timestamp, userId, mensaje, respuesta, estado |
-| Telegram Notify | Notifica al dueño por Telegram cada conversación |
-| Output Response | Devuelve solo el texto al widget |
+| Webhook | Recibe mensajes del widget (POST) |
+| Leer KB | Lee la base de conocimiento del negocio desde Google Sheets |
+| Prepare DeepSeek | Extrae nombre/contacto, construye system prompt con KB |
+| DeepSeek Model + AI Agent | Genera respuesta con IA (DeepSeek nativo vía LangChain) |
+| Format Response | Extrae respuesta, ||DATOS:, ||RESUMEN:, clasifica lead |
+| Respond Now | Responde al widget inmediatamente (~4-5s) |
+| Map CRM Fields | Pasa datos al pipeline de CRM |
+| Leer CRM Session | Lee filas existentes del CRM |
+| Check Session Exists | Busca si la sesión ya tiene fila en el CRM |
+| Update / Append CRM | Actualiza sesión existente o crea nueva fila |
+| ¿Es Lead? | Si tiene datos de contacto → notifica por Telegram |
+| Telegram Notify | Envía notificación al dueño cuando se capta un lead |
 
 ## Stack técnico
 
@@ -74,4 +82,4 @@ Webhook Chat → Prepare DeepSeek → DeepSeek API → Format Response → Googl
 
 ## Créditos
 
-AuxoVelari · Abril 2026
+Chatbot Web · Abril 2026
