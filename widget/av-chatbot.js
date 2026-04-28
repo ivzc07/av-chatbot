@@ -25,8 +25,7 @@
   // ESTADO
   // ============================================================
   let isOpen = false;
-  let sessionId = sessionStorage.getItem('av_sessionId') || generateId();
-  sessionStorage.setItem('av_sessionId', sessionId);
+  let sessionId = generateId();
   let messageHistory = [];
   let leadCapturedShown = false;
 
