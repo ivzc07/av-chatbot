@@ -1,9 +1,42 @@
 /**
  * AuxoVelari Chatbot Widget v1.0.0
  * Widget de chat con IA - Embebible con 1 línea de código
- * 
+ *
+ * ============================================================
+ * ATRIBUTOS DE CONFIGURACIÓN (data-attributes en el <script>)
+ * ============================================================
+ * data-business  → Nombre del negocio (ej: "Cala Blanca")
+ * data-welcome   → Mensaje de bienvenida al abrir el chat
+ * data-color     → Color principal en hex (ej: "#2E86AB")
+ * data-tone      → Tono de voz: "informal" (tú, emojis) o "formal" (usted, profesional)
+ * data-api       → URL del webhook n8n que procesa los mensajes
+ * data-endpoint  → Alternativa a data-api (mismo propósito)
+ *
+ * ============================================================
+ * FLUJO DE DATOS
+ * ============================================================
+ * 1. El visitante escribe un mensaje → se envía POST al endpoint
+ * 2. Body: { sessionId, message, history, businessName, tone }
+ * 3. El backend (n8n) consulta la base de conocimiento, genera respuesta con IA
+ * 4. Respuesta esperada: { response, leadCaptured }
+ * 5. Si leadCaptured=true → se muestra confirmación visual en el chat
+ *
+ * ============================================================
+ * COMPATIBILIDAD
+ * ============================================================
+ * - Funciona en cualquier web: WordPress, Wix, HTML plano, etc.
+ * - Sin dependencias externas (JS vanilla + CSS)
+ * - Responsive: escritorio y móvil (<768px)
+ * - Sesiones: un ID único por carga de página (Date.now + random)
+ *
  * Uso:
- * <script src="av-chatbot.js" data-business="Restaurante Sol" data-welcome="¡Hola! ¿En qué puedo ayudarte?" data-color="#2E86AB" data-tone="informal" data-api="https://tu-n8n.com/webhook/chat"></script>
+ * <script src="av-chatbot.js"
+ *         data-business="Restaurante Sol"
+ *         data-welcome="¡Hola! ¿En qué puedo ayudarte?"
+ *         data-color="#2E86AB"
+ *         data-tone="informal"
+ *         data-endpoint="https://tu-n8n.com/webhook/chat">
+ * </script>
  */
 
 (function() {
@@ -29,6 +62,12 @@
   let messageHistory = [];
   let leadCapturedShown = false;
 
+  /**
+   * Genera un ID único de sesión.
+   * Formato: av_<timestamp>_<random> (ej: av_1700000000000_abc123def)
+   * Se ejecuta una vez por carga de página. No persiste entre recargas.
+   * @returns {string} ID único de sesión
+   */
   function generateId() {
     return 'av_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
@@ -337,6 +376,12 @@
   // ============================================================
   // INYECTAR EN EL DOM
   // ============================================================
+  /**
+   * Inicializa el widget: crea el DOM, inyecta estilos CSS,
+   * registra event listeners y configura el observer de bienvenida.
+   * Se ejecuta automáticamente al cargar la página.
+   * Evita doble inicialización si ya existe #av-chatbot-container.
+   */
   function init() {
     // Evitar doble inicialización
     if (document.getElementById('av-chatbot-container')) return;
@@ -372,6 +417,11 @@
     observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
   }
 
+  /**
+   * Escapa caracteres HTML para prevenir XSS.
+   * @param {string} text - Texto a escapar
+   * @returns {string} Texto seguro para insertar en innerHTML
+   */
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -381,6 +431,10 @@
   // ============================================================
   // ABRIR / CERRAR CHAT
   // ============================================================
+  /**
+   * Alterna la visibilidad del panel de chat (abrir/cerrar).
+   * Al abrir enfoca el input automáticamente.
+   */
   function toggleChat() {
     isOpen = !isOpen;
     const panel = document.getElementById('av-panel');
@@ -392,6 +446,10 @@
     }
   }
 
+  /**
+   * Muestra el mensaje de bienvenida la primera vez que se abre el chat.
+   * Solo se ejecuta si el panel de mensajes está vacío.
+   */
   function showWelcome() {
     const messagesEl = document.getElementById('av-messages');
     if (messagesEl.children.length === 0) {
@@ -402,6 +460,11 @@
   // ============================================================
   // MENSAJES
   // ============================================================
+  /**
+   * Añade un mensaje al panel de chat y hace scroll al final.
+   * @param {string} text - Contenido del mensaje
+   * @param {string} sender - "user" | "bot" | "error" (define el estilo CSS)
+   */
   function addMessage(text, sender) {
     const messagesEl = document.getElementById('av-messages');
     const div = document.createElement('div');
@@ -411,6 +474,10 @@
     scrollToBottom();
   }
 
+  /**
+   * Muestra la confirmación de lead captado (solo una vez por sesión).
+   * Se activa cuando el backend responde con leadCaptured=true.
+   */
   function showLeadCaptured() {
     if (leadCapturedShown) return;
     leadCapturedShown = true;
@@ -422,6 +489,7 @@
     scrollToBottom();
   }
 
+  /** Muestra el indicador de "escribiendo..." (tres puntos animados). */
   function showTyping() {
     const messagesEl = document.getElementById('av-messages');
     const div = document.createElement('div');
@@ -432,11 +500,13 @@
     scrollToBottom();
   }
 
+  /** Elimina el indicador de "escribiendo...". */
   function hideTyping() {
     const typing = document.getElementById('av-typing');
     if (typing) typing.remove();
   }
 
+  /** Hace scroll al último mensaje del panel de chat. */
   function scrollToBottom() {
     const messagesEl = document.getElementById('av-messages');
     setTimeout(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }, 50);
@@ -445,6 +515,18 @@
   // ============================================================
   // ENVIAR MENSAJE AL BACKEND
   // ============================================================
+  /**
+   * Envía el mensaje del visitante al backend (n8n) y muestra la respuesta.
+   *
+   * Flujo:
+   * 1. Lee el texto del input, lo añade al chat y al historial
+   * 2. Envía POST al endpoint con: sessionId, message, history, businessName, tone
+   * 3. Si no hay endpoint → muestra mensaje de prueba
+   * 4. Si hay error de red → muestra mensaje de error
+   * 5. Si el backend responde leadCaptured=true → muestra confirmación
+   *
+   * @async
+   */
   async function sendMessage() {
     const input = document.getElementById('av-input');
     const sendBtn = document.getElementById('av-send');
