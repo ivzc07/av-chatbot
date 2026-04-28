@@ -28,6 +28,14 @@
   let sessionId = generateId();
   let messageHistory = [];
 
+  // Detectar restauración de caché del navegador (bfcache) — forzar sesión nueva
+  window.addEventListener('pageshow', function(event) {
+    if (event.persisted) {
+      sessionId = generateId();
+      messageHistory = [];
+    }
+  });
+
   function generateId() {
     return 'av_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
