@@ -25,24 +25,35 @@
   // ESTADO
   // ============================================================
   let isOpen = false;
-  let sessionId = generateId();
-  let messageHistory = [];
 
-  // Detectar restauración de caché del navegador (bfcache) — forzar sesión nueva
-  window.addEventListener('pageshow', function(event) {
-    if (event.persisted) {
-      sessionId = generateId();
-      messageHistory = [];
-      // Limpiar chat visual
-      const messagesEl = document.getElementById('av-messages');
-      if (messagesEl) {
-        messagesEl.innerHTML = '';
-        if (messagesEl.children.length === 0 && CONFIG.welcomeMessage) {
-          addMessage(CONFIG.welcomeMessage, 'bot');
-        }
-      }
+  // Detectar recarga real de página — si el usuario hizo F5/Enter en la barra,
+  // sessionStorage tendrá la marca de beforeunload de la carga anterior
+  var RELOAD_KEY = 'av_reload_ts';
+  var isReload = false;
+  try {
+    var lastUnload = parseInt(sessionStorage.getItem(RELOAD_KEY), 10);
+    // Si la página se descargó hace menos de 10 segundos, es una recarga
+    if (lastUnload && (Date.now() - lastUnload) < 10000) {
+      isReload = true;
     }
+    sessionStorage.removeItem(RELOAD_KEY);
+  } catch(e) {}
+
+  // Marcar al salir para que la próxima carga detecte la recarga
+  window.addEventListener('beforeunload', function() {
+    try { sessionStorage.setItem(RELOAD_KEY, Date.now()); } catch(e) {}
   });
+
+  // Forzar sesión nueva en cada recarga
+  var sessionId;
+  if (isReload) {
+    sessionId = generateId();
+    // Limpiar cualquier historial previo
+    try { sessionStorage.removeItem('av_history'); } catch(e) {}
+  } else {
+    sessionId = generateId();
+  }
+  var messageHistory = [];
 
   function generateId() {
     return 'av_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
