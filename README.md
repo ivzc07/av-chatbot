@@ -4,7 +4,7 @@ Widget de chat con IA para webs de negocio. Entiende lenguaje natural, responde 
 
 ## Demo
 
-Abre `demo/index.html` en tu navegador para ver el widget funcionando con el restaurante de prueba "Cala Blanca" (Menorca).
+Abre https://ivzc07.github.io/av-chatbot/demo/ para ver el widget funcionando con el restaurante de prueba "Cala Blanca" (Menorca).
 
 ## Estructura del proyecto
 
@@ -27,7 +27,7 @@ av-chatbot/
 1. Añade esta línea a cualquier web:
 
 ```html
-<script src="https://TU_SERVIDOR/widget/av-chatbot.js"
+<script src="https://ivzc07.github.io/av-chatbot/widget/av-chatbot.js"
         data-business="Mi Negocio"
         data-welcome="¡Hola! ¿En qué puedo ayudarte?"
         data-color="#2E86AB"
@@ -75,8 +75,10 @@ Webhook Chat → Leer KB → Prepare DeepSeek → DeepSeek Model + AI Agent → 
 
 ## Producción
 
-- **n8n:** wsnl92d3INp291sT @ auxo.app.n8n.cloud
+- **n8n:** instancia cloud en `auxo.app.n8n.cloud`
 - **Webhook:** `POST https://auxo.app.n8n.cloud/webhook/av-chatbot`
+- **Widget:** `https://ivzc07.github.io/av-chatbot/widget/av-chatbot.js`
+- **Demo:** `https://ivzc07.github.io/av-chatbot/demo/`
 - **Sheets:** `14jda--cH6USqr0vm2vExmZe6VNQ4dmP5N9OxrFox3JM`
 - **Telegram:** bot `@n8n_izvc9999_bot`
 

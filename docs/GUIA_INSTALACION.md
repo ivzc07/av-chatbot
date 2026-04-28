@@ -148,8 +148,8 @@ El workflow lee el token y el Chat ID desde la pestaña "Conocimiento" de Google
 
 Sube `widget/av-chatbot.js` a tu servidor. Opciones:
 
+- **GitHub Pages:** Actívalo en Settings → Pages, el archivo se sirve desde `TU_USUARIO.github.io/av-chatbot/widget/av-chatbot.js`
 - **VPS con nginx/Apache:** Copia a `/var/www/html/widget/av-chatbot.js`
-- **GitHub Pages:** Sube a un repo y usa la URL raw
 - **CDN / Hosting:** Cualquier hosting de archivos estáticos con HTTPS
 
 ### 6.2 Añadir la línea de instalación
