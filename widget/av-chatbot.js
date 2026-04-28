@@ -33,6 +33,14 @@
     if (event.persisted) {
       sessionId = generateId();
       messageHistory = [];
+      // Limpiar chat visual
+      const messagesEl = document.getElementById('av-messages');
+      if (messagesEl) {
+        messagesEl.innerHTML = '';
+        if (messagesEl.children.length === 0 && CONFIG.welcomeMessage) {
+          addMessage(CONFIG.welcomeMessage, 'bot');
+        }
+      }
     }
   });
 
